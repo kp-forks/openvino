@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -34,7 +34,7 @@ void assignTest() {
 
     // Test StaticShape
     std::vector<StaticShape> static_input_shapes = {StaticShape{1, 2, 64, 64}}, static_output_shapes = {StaticShape{}};
-    shape_inference(assign.get(), static_input_shapes, static_output_shapes);
+    static_output_shapes = shape_inference(assign.get(), static_input_shapes);
     ASSERT_EQ(static_input_shapes[0], (StaticShape{1, 2, 64, 64}));
 }
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -32,6 +32,17 @@ public:
     static std::vector<layout> calc_output_layouts(reduce_node const& node, const kernel_impl_params& impl_param);
     static layout calc_output_layout(reduce_node const& node, kernel_impl_params const& impl_param);
     static std::string to_string(reduce_node const& node);
+
+    bool need_reset_input_memory(size_t idx = 0) const override {
+        if (idx != 0)
+            return false;
+
+        auto input_layout = _deps[0].first->_impl_params->get_output_layout(_deps[0].second);
+        if (!format::format::is_simple_data_format(input_layout.format) && input_layout.feature() % 16 != 0) {
+            return true;
+        }
+        return false;
+    }
 
     typed_primitive_inst(network& network, reduce_node const& desc);
 };

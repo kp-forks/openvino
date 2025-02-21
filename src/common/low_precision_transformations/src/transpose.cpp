@@ -1,41 +1,41 @@
-﻿// Copyright (C) 2018-2023 Intel Corporation
+﻿// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #include "low_precision/transpose.hpp"
 
 #include <memory>
-#include <ngraph/ngraph.hpp>
 
-#include <ngraph/pattern/op/wrap_type.hpp>
+#include "itt.hpp"
+#include "openvino/util/log.hpp"
+#include "openvino/pass/pattern/op/wrap_type.hpp"
 
 #include "low_precision/common/ie_lpt_exception.hpp"
 #include "low_precision/network_helper.hpp"
-#include "itt.hpp"
 
-namespace ngraph {
+namespace ov {
 namespace pass {
 namespace low_precision {
 
 TransposeTransformation::TransposeTransformation(const Params& params) : LayerTransformation(params) {
     MATCHER_SCOPE(TransposeTransformation);
-    auto matcher = pattern::wrap_type<opset1::Transpose>({ pattern::wrap_type<opset1::Multiply>(), pattern::wrap_type<opset1::Constant>() });
+    auto matcher = pattern::wrap_type<ov::opset1::Transpose>({ pattern::wrap_type<ov::opset1::Multiply>(), pattern::wrap_type<ov::opset1::Constant>() });
 
-    ngraph::graph_rewrite_callback callback = [this](pattern::Matcher& m) {
+    ov::graph_rewrite_callback callback = [this](pattern::Matcher& m) {
         auto op = m.get_match_root();
         if (transformation_callback(op)) {
             return false;
         }
-        return transform(*context, m);
+        return transform(m);
     };
 
-    auto m = std::make_shared<ngraph::pattern::Matcher>(matcher, matcher_name);
+    auto m = std::make_shared<ov::pass::pattern::Matcher>(matcher, matcher_name);
     this->register_matcher(m, callback);
 }
 
 namespace {
 
-void transposeDequantizationConstant(std::shared_ptr<Node>& transpose, const std::vector<ngraph::element::Type>& defaultPrecisions) {
+void transposeDequantizationConstant(std::shared_ptr<Node>& transpose, const std::vector<ov::element::Type>& defaultPrecisions) {
     const FakeQuantizeDequantization dequantization = NetworkHelper::getDequantization(transpose, defaultPrecisions);
 
     const Shape subtractShape = dequantization.subtract == nullptr ? Shape{} : dequantization.subtractConstant->get_shape();
@@ -45,7 +45,7 @@ void transposeDequantizationConstant(std::shared_ptr<Node>& transpose, const std
     }
 
     auto transposeDeqConstant = [](
-        const std::shared_ptr<opset1::Constant>& dequantizationConstant,
+        const std::shared_ptr<ov::opset1::Constant>& dequantizationConstant,
         const PartialShape& transposeOutputPShape,
         const std::shared_ptr<Node>& transposeConstant) -> std::shared_ptr<Node> {
             const auto constantShape = dequantizationConstant->get_shape();
@@ -56,11 +56,11 @@ void transposeDequantizationConstant(std::shared_ptr<Node>& transpose, const std
             assert(transposeOutputPShape.rank().is_static());
             const size_t transposeOutRank = transposeOutputPShape.rank().get_length();
             if (constantShape.size() != transposeOutRank) {
-                const auto unsqueezeConst = opset1::Constant::create(element::i32, Shape{ 1 }, std::vector<size_t>{ 0 });
-                const auto deqConstantWithBatch = fold<opset1::Unsqueeze>(dequantizationConstant, unsqueezeConst);
-                return fold<opset1::Transpose>(deqConstantWithBatch, transposeConstant);
+                const auto unsqueezeConst = ov::opset1::Constant::create(element::i32, Shape{ 1 }, std::vector<size_t>{ 0 });
+                const auto deqConstantWithBatch = fold<ov::opset1::Unsqueeze>(dequantizationConstant, unsqueezeConst);
+                return fold<ov::opset1::Transpose>(deqConstantWithBatch, transposeConstant);
             } else {
-                return fold<opset1::Transpose>(dequantizationConstant, transposeConstant);
+                return fold<ov::opset1::Transpose>(dequantizationConstant, transposeConstant);
             }
     };
 
@@ -83,15 +83,17 @@ void transposeDequantizationConstant(std::shared_ptr<Node>& transpose, const std
 
 } // namespace
 
-bool TransposeTransformation::transform(TransformationContext& context, ngraph::pattern::Matcher &m) {
+bool TransposeTransformation::transform(ov::pass::pattern::Matcher &m) {
     std::shared_ptr<Node> transpose = m.get_match_root();
-    if (!canBeTransformed(context, transpose)) {
+    if (!canBeTransformed(transpose)) {
         return false;
     }
 
     transpose = NetworkHelper::separateInStandaloneBranch(transpose, defaultPrecisions);
     transposeDequantizationConstant(transpose, defaultPrecisions);
-    moveDequantizationAfter(context, transpose, NetworkHelper::getDequantization(transpose, defaultPrecisions, 0), false);
+    const auto newOperation = moveDequantizationAfter(transpose, NetworkHelper::getDequantization(transpose, defaultPrecisions, 0));
+
+    OPENVINO_DEBUG("LPT: done: ", newOperation);
     return true;
 }
 
@@ -99,12 +101,12 @@ bool TransposeTransformation::isPrecisionPreserved(std::shared_ptr<Node> op) con
     return true;
 }
 
-bool TransposeTransformation::canBeTransformed(const TransformationContext& context, std::shared_ptr<Node> op) const {
-    if (!LayerTransformation::canBeTransformed(context, op)) {
+bool TransposeTransformation::canBeTransformed(const std::shared_ptr<Node>& op) const {
+    if (!LayerTransformation::canBeTransformed(op)) {
         return false;
     }
 
-    const std::shared_ptr<opset1::Constant> constant = ov::as_type_ptr<opset1::Constant>(op->get_input_node_shared_ptr(1));
+    const std::shared_ptr<ov::opset1::Constant> constant = ov::as_type_ptr<ov::opset1::Constant>(op->get_input_node_shared_ptr(1));
     if (constant == nullptr) {
         return false;
     }
@@ -117,7 +119,7 @@ bool TransposeTransformation::canBeTransformed(const TransformationContext& cont
             }
         }
         if (dequantization.multiply != nullptr) {
-            const auto mulConst = ov::as_type_ptr<ngraph::op::v0::Constant>(dequantization.multiplyConstant);
+            const auto mulConst = ov::as_type_ptr<ov::op::v0::Constant>(dequantization.multiplyConstant);
             if (!NetworkHelper::isScalarLike(mulConst)) {
                 return false;
             }
@@ -133,7 +135,7 @@ bool TransposeTransformation::canBeTransformed(const TransformationContext& cont
         }
     }
 
-    auto checkShape = [](const std::shared_ptr<opset1::Constant>& dequantizationConstant, const PartialShape& transposeOutputShape) -> bool {
+    auto checkShape = [](const std::shared_ptr<ov::opset1::Constant>& dequantizationConstant, const PartialShape& transposeOutputShape) -> bool {
         const auto dequantizationShape = dequantizationConstant->get_shape();
         const auto rank = transposeOutputShape.rank();
         if (rank.is_dynamic()) {
@@ -160,4 +162,4 @@ bool TransposeTransformation::canBeTransformed(const TransformationContext& cont
 
 } // namespace low_precision
 } // namespace pass
-} // namespace ngraph
+} // namespace ov

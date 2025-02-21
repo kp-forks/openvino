@@ -1,14 +1,14 @@
-// Copyright (C) 2018-2021 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include <openvino/frontend/extension/conversion.hpp>
-#include <openvino/frontend/extension/decoder_transformation.hpp>
-#include <openvino/op/util/framework_node.hpp>
-#include <openvino/opsets/opset8.hpp>
+#include "openvino/frontend/extension/conversion.hpp"
 
 #include "common_test_utils/file_utils.hpp"
 #include "conversion_extension.hpp"
+#include "openvino/frontend/extension/decoder_transformation.hpp"
+#include "openvino/op/util/framework_node.hpp"
+#include "openvino/opsets/opset8.hpp"
 #include "utils.hpp"
 
 using namespace ov::frontend;
@@ -29,8 +29,8 @@ void FrontEndConversionExtensionTest::initParamTest() {
 }
 
 inline std::string get_lib_path(const std::string& lib_name) {
-    return ov::util::make_plugin_library_name<char>(CommonTestUtils::getExecutableDirectory(),
-                                                    lib_name + IE_BUILD_POSTFIX);
+    return ov::util::make_plugin_library_name<char>(ov::test::utils::getExecutableDirectory(),
+                                                    lib_name + OV_BUILD_POSTFIX);
 }
 
 ///////////////////////////////////////////////////////////////////
@@ -76,10 +76,10 @@ TEST_P(FrontEndConversionExtensionTest, TestConversionExtension) {
                                                   }));
     }
     std::shared_ptr<InputModel> input_model;
-    ASSERT_NO_THROW(input_model = frontend->load(m_param.m_modelName));
+    OV_ASSERT_NO_THROW(input_model = frontend->load(m_param.m_modelName));
     ASSERT_NE(input_model, nullptr);
     std::shared_ptr<ov::Model> model;
-    ASSERT_NO_THROW(model = frontend->convert(input_model));
+    OV_ASSERT_NO_THROW(model = frontend->convert(input_model));
     ASSERT_NE(model, nullptr);
     EXPECT_EQ(invoked, true);
 }
@@ -89,9 +89,23 @@ TEST_P(FrontEndConversionExtensionTest, TestConversionExtensionViaSO) {
     const auto& lib_path = get_lib_path("test_builtin_extensions");
     frontend->add_extension(lib_path);
     std::shared_ptr<InputModel> input_model;
-    ASSERT_NO_THROW(input_model = frontend->load(m_param.m_modelName));
+    OV_ASSERT_NO_THROW(input_model = frontend->load(m_param.m_modelName));
     ASSERT_NE(input_model, nullptr);
     std::shared_ptr<ov::Model> model;
-    ASSERT_NO_THROW(model = frontend->convert(input_model));
+    OV_ASSERT_NO_THROW(model = frontend->convert(input_model));
     ASSERT_NE(model, nullptr);
 }
+
+#ifdef OPENVINO_CPP_VER_AT_LEAST_17
+TEST_P(FrontEndConversionExtensionTest, TestConversionExtensionViaSOByPath) {
+    auto frontend = m_param.m_frontend;
+    const std::filesystem::path lib_path = get_lib_path("test_builtin_extensions");
+    frontend->add_extension(lib_path);
+    std::shared_ptr<InputModel> input_model;
+    OV_ASSERT_NO_THROW(input_model = frontend->load(m_param.m_modelName));
+    ASSERT_NE(input_model, nullptr);
+    std::shared_ptr<ov::Model> model;
+    OV_ASSERT_NO_THROW(model = frontend->convert(input_model));
+    ASSERT_NE(model, nullptr);
+}
+#endif

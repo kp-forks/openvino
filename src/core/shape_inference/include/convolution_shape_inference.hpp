@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 #pragma once
@@ -10,18 +10,22 @@
 namespace ov {
 namespace op {
 namespace v1 {
-template <class TFrowardConv, class TShape, class TContainer>
-std::vector<TShape> shape_infer(const TFrowardConv* op,
-                                const std::vector<TShape>& input_shapes,
-                                TContainer& pads_begin,
-                                TContainer& pads_end,
-                                const std::map<size_t, HostTensorPtr>& constant_data = {}) {
+template <class TOp,
+          class TShape,
+          class TRShape = result_shape_t<TShape>,
+          typename std::enable_if<std::is_same<TOp, Convolution>::value ||
+                                  std::is_same<TOp, BinaryConvolution>::value>::type* = nullptr>
+std::vector<TRShape> shape_infer(const TOp* op,
+                                 const std::vector<TShape>& input_shapes,
+                                 CoordinateDiff& pads_begin,
+                                 CoordinateDiff& pads_end) {
     NODE_VALIDATION_CHECK(op, input_shapes.size() >= 2);
     using namespace ov::util;
 
     const auto num_spatial = convolution::calculate_num_spatial(op, input_shapes);
 
-    TShape output_shape;
+    auto output_shapes = std::vector<TRShape>(1);
+    auto& output_shape = output_shapes[0];
     if (num_spatial != util::num_spatial_undefined) {
         const auto& data_shape = input_shapes[0];
         const auto& filters_shape = input_shapes[1];
@@ -44,7 +48,7 @@ std::vector<TShape> shape_infer(const TFrowardConv* op,
         output_shape = PartialShape::dynamic();
     }
 
-    return {output_shape};
+    return output_shapes;
 }
 }  // namespace v1
 }  // namespace op

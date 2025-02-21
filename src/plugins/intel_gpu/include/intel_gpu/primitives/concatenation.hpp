@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -32,6 +32,9 @@ namespace cldnn {
 ///   @li outputIdx : index of destination feature
 struct concatenation : public primitive_base<concatenation> {
     CLDNN_DECLARE_PRIMITIVE(concatenation)
+
+    concatenation() : primitive_base("", {}) {}
+
     /// @li Constructs concatenation primitive.
     /// @param id This primitive id.
     /// @param input Vector of input primitives ids.
@@ -39,9 +42,8 @@ struct concatenation : public primitive_base<concatenation> {
     concatenation(
         const primitive_id& id,
         const std::vector<input_info>& input,
-        const int64_t axis,
-        const padding& output_padding = padding())
-        : primitive_base(id, {input}, {output_padding}), axis(axis) {}
+        const int64_t axis)
+        : primitive_base(id, {input}), axis(axis) {}
 
     /// @li Constructs concatenation primitive.
     /// @param id This primitive id.
@@ -52,12 +54,11 @@ struct concatenation : public primitive_base<concatenation> {
         const primitive_id& id,
         const std::vector<input_info>& input,
         const int64_t axis,
-        const data_types output_dt,
-        const padding& output_padding = padding())
-        : primitive_base(id, {input}, {output_padding}, {optional_data_type{output_dt}}), axis(axis) {}
+        const data_types output_dt)
+        : primitive_base(id, {input}, 1, {optional_data_type{output_dt}}), axis(axis) {}
 
     /// @brief Dimension along which concatenation should take place
-    int64_t axis;
+    int64_t axis = 0;
 
     size_t hash() const override {
         size_t seed = primitive::hash();
@@ -72,6 +73,16 @@ struct concatenation : public primitive_base<concatenation> {
         auto rhs_casted = downcast<const concatenation>(rhs);
 
         return axis == rhs_casted.axis;
+    }
+
+    void save(BinaryOutputBuffer& ob) const override {
+        primitive_base<concatenation>::save(ob);
+        ob << axis;
+    }
+
+    void load(BinaryInputBuffer& ib) override {
+        primitive_base<concatenation>::load(ib);
+        ib >> axis;
     }
 };
 }  // namespace cldnn

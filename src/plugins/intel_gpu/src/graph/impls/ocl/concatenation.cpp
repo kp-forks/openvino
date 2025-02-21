@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -15,9 +15,9 @@ namespace {
 kernel_selector::concat_axis convert_axis(int64_t axis, size_t rank) {
     auto cldnn_axis = axis >= 0 ? axis : axis + static_cast<int64_t>(rank);
     if (cldnn_axis >= static_cast<int64_t>(rank))
-        IE_THROW() << "Concatenation axis exceeds number of dimensions";
+        OPENVINO_THROW("Concatenation axis exceeds number of dimensions");
 
-    // Difference in dimension ordering between IE and GPU plugin,
+    // Difference in dimension ordering between OV and GPU plugin,
     // reverse spatial dimensions after batch and feature.
     if (cldnn_axis >= 2) {
         auto spatial_axis = cldnn_axis - 2;
@@ -33,7 +33,7 @@ kernel_selector::concat_axis convert_axis(int64_t axis, size_t rank) {
         case 3: return kernel_selector::concat_axis::Y;
         case 4: return kernel_selector::concat_axis::Z;
         case 5: return kernel_selector::concat_axis::W;
-        default: IE_THROW() << "Unsupported concatenation axis: " << axis;
+        default: OPENVINO_THROW("Unsupported concatenation axis: ", axis);
     }
 
     return kernel_selector::concat_axis::FEATURE;  // shouldn't get here
@@ -45,19 +45,27 @@ struct concatenation_impl : typed_primitive_impl_ocl<concatenation> {
     using parent = typed_primitive_impl_ocl<concatenation>;
     using parent::parent;
     using kernel_selector_t = kernel_selector::concatenation_kernel_selector;
-    using kernel_params_t = std::pair<kernel_selector::concatenation_params, kernel_selector::concatenation_optional_params>;
+    using kernel_params_t = kernel_selector::concatenation_params;
 
-    DECLARE_OBJECT_TYPE_SERIALIZATION
+    DECLARE_OBJECT_TYPE_SERIALIZATION(cldnn::ocl::concatenation_impl)
 
     std::unique_ptr<primitive_impl> clone() const override {
-        return make_unique<concatenation_impl>(*this);
+        return make_deep_copy<concatenation_impl, kernel_params_t>(*this);
+    }
+
+    void load(BinaryInputBuffer& ib) override {
+        parent::load(ib);
+        if (is_dynamic() && _kernel_data.kernelName.length() != 0) {
+            auto& kernel_selector = kernel_selector_t::Instance();
+            auto kernel_impl = kernel_selector.GetImplementation(_kernel_data.kernelName);
+            kernel_impl->GetUpdateDispatchDataFunc(_kernel_data);
+        }
     }
 
 public:
     static kernel_params_t get_kernel_params(const kernel_impl_params& impl_param, bool is_shape_agnostic = false) {
         const auto& primitive = impl_param.typed_desc<concatenation>();
         auto params = get_default_params<kernel_selector::concatenation_params>(impl_param, is_shape_agnostic);
-        auto optional_params = get_default_optional_params<kernel_selector::concatenation_optional_params>(impl_param.get_program());
         auto axis = primitive->axis;
 
         auto inputs_count = primitive->input.size();
@@ -68,14 +76,19 @@ public:
         }
 
         params.axis = convert_axis(axis, impl_param.get_output_layout().get_rank());
-        optional_params.kernelPerInput = true;
+        params.kernelPerInput = true;
 
-        return {params, optional_params};
+        return params;
     }
 
     void update_dispatch_data(const kernel_impl_params& impl_param) override {
-        auto kernel_params = get_kernel_params(impl_param, true);
-        (_kernel_data.update_dispatch_data_func)(kernel_params.first, _kernel_data);
+        // If model loaded from cache, params are not initialized, so we create a new object and reuse it in the future
+        if (_kernel_data.params == nullptr) {
+            _kernel_data.params = std::make_shared<kernel_params_t>(get_kernel_params(impl_param, true));
+        }
+
+        update_shapes(*_kernel_data.params, impl_param);
+        (_kernel_data.update_dispatch_data_func)(*_kernel_data.params, _kernel_data);
     }
 };
 
@@ -182,3 +195,4 @@ attach_concatenation_impl::attach_concatenation_impl() {
 }  // namespace cldnn
 
 BIND_BINARY_BUFFER_WITH_TYPE(cldnn::ocl::concatenation_impl)
+BIND_BINARY_BUFFER_WITH_TYPE(cldnn::concatenation)

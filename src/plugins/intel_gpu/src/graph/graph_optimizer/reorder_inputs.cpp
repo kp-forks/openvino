@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -9,10 +9,9 @@
 #include "intel_gpu/runtime/debug_configuration.hpp"
 #include "intel_gpu/runtime/utils.hpp"
 #include "program_helpers.h"
-#include "binary_convolution_inst.h"
-#include "mvn_inst.h"
 #include "to_string_utils.h"
 #include "pooling_inst.h"
+#include "fully_connected_inst.h"
 
 #ifdef ENABLE_ONEDNN_FOR_GPU
 #include "gemm_inst.h"
@@ -25,15 +24,14 @@
 #include <list>
 #include <map>
 #include <set>
-#include <tuple>
 
 using namespace cldnn;
 
 // ToDo remove friendship relation from program
 
-reorder_inputs::reorder_inputs(layout_optimizer& lo_ref, reorder_factory& rf_ref) : base_pass("reorder_inputs"), _lo(lo_ref), _rf(rf_ref) {}
+reorder_inputs::reorder_inputs(reorder_factory& rf_ref) : base_pass("reorder_inputs"), _rf(rf_ref) {}
 
-void reorder_inputs::run(program& p) { run(p, _lo, _rf); }
+void reorder_inputs::run(program& p) { run(p, _rf); }
 
 namespace {
 
@@ -58,9 +56,9 @@ std::map<program_node*, format::type> get_preferred_formats(program& p, layout_o
             onednn_impls_counter++;
     }
 
-    if (onednn_impls_counter < 1 && lo.get_optimization_attributes().use_onednn_impls) {
+    if (!lo.is_empty_onednn_impls_optimization_attribute() && onednn_impls_counter < 1) {
         should_update_fmt_map = true;
-        lo.set_optimization_attribute(layout_optimizer::optimization_attributes_type::use_onednn_impls, 0);
+        lo.clear_onednn_impls_optimization_attribute();
         GPU_DEBUG_LOG << "Disable oneDNN implementations globally" << std::endl;
     }
 
@@ -119,15 +117,10 @@ struct travel_direction_wrapper<direction_e::backwards> {
 static format get_target_output_format(layout_optimizer& lo, const std::map<program_node*, format::type>& fmt_map, program_node *node, program_node *next) {
     auto user_idx = node->get_user_index(*next);
 
-    bool allow_new_shape_infer = node->get_program().get_config().get_property(ov::intel_gpu::allow_new_shape_infer);
     // 1. Check selected preferred_output_format
-    if (lo.get_optimization_attributes().use_onednn_impls || allow_new_shape_infer) {
-        // If onednn is not used, need to ignore get_preferred_output_fmt result as it is from onednn
-        auto ret = node->get_preferred_output_fmt(user_idx);
-
-        if (ret != format::any)
-            return ret;
-    }
+    auto ret = node->get_preferred_output_fmt(user_idx);
+    if (ret != format::any)
+        return ret;
 
     // 2. Check fmt
     if (fmt_map.count(node) > 0)
@@ -140,14 +133,10 @@ static format get_target_output_format(layout_optimizer& lo, const std::map<prog
 static format get_target_input_format(layout_optimizer& lo, const std::map<program_node*, format::type>& fmt_map, program_node *node, program_node *prev) {
     auto dep_idx = node->get_dependency_index(*prev);
 
-    bool allow_new_shape_infer = node->get_program().get_config().get_property(ov::intel_gpu::allow_new_shape_infer);
     // 1. Check selected preferred_input_format
-    if (lo.get_optimization_attributes().use_onednn_impls || allow_new_shape_infer) {
-        // If onednn is not used, need to ignore get_preferred_input_fmt result as it is from onednn
-        auto ret = node->get_preferred_input_fmt(dep_idx);
-        if (ret != format::any)
-            return ret;
-    }
+    auto ret = node->get_preferred_input_fmt(dep_idx);
+    if (ret != format::any)
+        return ret;
 
     // 2. Check fmt
     if (fmt_map.count(node) > 0)
@@ -540,6 +529,15 @@ const char *dir_msg(direction_e dir) {
         return "backward";
 }
 
+static bool is_weights_dependency(program_node* predecessor, program_node* successor) {
+    bool is_weights_dep = false;
+    if (successor->is_type<convolution>() || successor->is_type<deconvolution>() || successor->is_type<fully_connected>()) {
+        size_t dep_idx = successor->get_dependency_index(*predecessor);
+        is_weights_dep = dep_idx == successor->get_primitive()->input_size();
+    }
+    return is_weights_dep;
+}
+
 // If there is layout mismatch between two layers, add reorder
 template <direction_e dir>
 void insert_reorders_in_dir(program& p, const std::map<program_node*, format::type>& fmt_map, reorder_factory& rf, layout_optimizer& lo, program_node* node) {
@@ -553,6 +551,9 @@ void insert_reorders_in_dir(program& p, const std::map<program_node*, format::ty
         if (fmt_map.count(next) > 0 && fmt_map.at(next) == fmt)
             continue;
 
+        if (is_weights_dependency(node, next))
+            continue;
+
         // We have three (potentially) conflicting information here for format
         //    node->get_output_layout().format : It is not up-to-date at this moment. It is just the default format (bfyx)
         //    fmt_map.at(node).format          : It is queried with get_preferred_layout. However, it has only output format.
@@ -560,7 +561,8 @@ void insert_reorders_in_dir(program& p, const std::map<program_node*, format::ty
         // So the priority is preferred_input/output_format --> fmt_map --> output_layout().format
         auto predecessor = travel_direction_wrapper<dir>::first(node, next);
         auto successor = travel_direction_wrapper<dir>::second(node, next);
-        auto in_layout = predecessor->get_output_layout();
+        auto port_idx = successor->get_dependency_output_port(*predecessor);
+        auto in_layout = predecessor->get_output_layout(false, port_idx);
         auto out_layout = in_layout;
 
         in_layout.format = get_target_output_format(lo, fmt_map, predecessor, successor);
@@ -569,10 +571,12 @@ void insert_reorders_in_dir(program& p, const std::map<program_node*, format::ty
         GPU_DEBUG_LOG << dir_msg(dir) << "  " << node->id() << " --> " << next->id() << " ## "
                       << fmt_to_str(in_layout.format) << " --> " << fmt_to_str(out_layout.format) << std::endl;
 
-        if (in_layout.format == format::any || out_layout.format == format::any)
+        if (in_layout.format == format::any || out_layout.format == format::any ||
+            in_layout.format == format::custom || out_layout.format == format::custom)
             continue;
 
-        auto reorder_pair = rf.get_reorder(travel_direction_wrapper<dir>::first(node, next)->id(),
+        auto reorder_pair = rf.get_reorder(predecessor->id(),
+                                           port_idx,
                                            in_layout,
                                            out_layout);
 
@@ -601,6 +605,9 @@ void insert_reorders_in_dir<direction_e::backwards>(program& p, const std::map<p
         if (fmt_map.count(next.first) > 0 && fmt_map.at(next.first) == fmt)
             continue;
 
+        if (is_weights_dependency(next.first, node))
+            continue;
+
         // We have three (potentially) conflicting information here for format
         //    node->get_output_layout().format : It is not up-to-date at this moment. It is just the default format (bfyx)
         //    fmt_map.at(node).format          : It is queried with get_preferred_layout. However, it has only output format.
@@ -608,7 +615,8 @@ void insert_reorders_in_dir<direction_e::backwards>(program& p, const std::map<p
         // So the priority is preferred_input/output_format --> fmt_map --> output_layout().format
         auto predecessor = travel_direction_wrapper<direction_e::backwards>::first(node, next.first);
         auto successor = travel_direction_wrapper<direction_e::backwards>::second(node, next.first);
-        auto in_layout = predecessor->get_output_layout();
+        auto port_idx = successor->get_dependency_output_port(*predecessor);
+        auto in_layout = predecessor->get_output_layout(false, port_idx);
         auto out_layout = in_layout;
 
         in_layout.format = get_target_output_format(lo, fmt_map, predecessor, successor);
@@ -617,10 +625,12 @@ void insert_reorders_in_dir<direction_e::backwards>(program& p, const std::map<p
         GPU_DEBUG_LOG << dir_msg(direction_e::backwards) << "  " << node->id() << " --> " << next.first->id() << " ## "
                       << fmt_to_str(in_layout.format) << " --> " << fmt_to_str(out_layout.format) << std::endl;
 
-        if (in_layout.format == format::any || out_layout.format == format::any)
+        if (in_layout.format == format::any || out_layout.format == format::any ||
+            in_layout.format == format::custom || out_layout.format == format::custom)
             continue;
 
-        auto reorder_pair = rf.get_reorder(travel_direction_wrapper<direction_e::backwards>::first(node, next.first)->id(),
+        auto reorder_pair = rf.get_reorder(predecessor->id(),
+                                           port_idx,
                                            in_layout,
                                            out_layout);
 
@@ -668,8 +678,8 @@ void insert_reorders(program& p, const std::map<program_node*, format::type>& fm
 
 }  // namespace
 
-void reorder_inputs::run(program& p, layout_optimizer& lo, reorder_factory& rf) {
-    GPU_DEBUG_GET_INSTANCE(debug_config);
+void reorder_inputs::run(program& p, reorder_factory& rf) {
+    auto& lo = p.get_layout_optimizer();
 
     auto fmt_map = get_preferred_formats(p, lo);
 
@@ -692,17 +702,17 @@ void reorder_inputs::run(program& p, layout_optimizer& lo, reorder_factory& rf) 
         GPU_DEBUG_LOG_PASS << "  " << node_ptr->id() << " " << fmt_to_str(fmt) << std::endl;
     }
 
-    GPU_DEBUG_IF(debug_config->verbose >= 2) {
-        reorder_cnt total_reorder_count = std::accumulate(
-            p.get_processing_order().begin(),
-            p.get_processing_order().end(),
-            reorder_cnt{ 0, 0 },
-            [&](reorder_cnt& total, program_node* node) {
-            if (fmt_map.count(node) == 0 || fmt_map.at(node) == format::any)
-                return total;
-            auto count = count_reorders(fmt_map, lo, node);
-            return reorder_cnt{ total.number + count.number, total.total_sizes + count.total_sizes };
-        });
+    GPU_DEBUG_IF(p.get_config().get_verbose() >= 2) {
+        reorder_cnt total_reorder_count =
+            std::accumulate(p.get_processing_order().begin(),
+                            p.get_processing_order().end(),
+                            reorder_cnt{0, 0},
+                            [&](reorder_cnt total, program_node* node) {
+                                if (fmt_map.count(node) == 0 || fmt_map.at(node) == format::any)
+                                    return total;
+                                auto count = count_reorders(fmt_map, lo, node);
+                                return reorder_cnt{total.number + count.number, total.total_sizes + count.total_sizes};
+                            });
         // Divide results by two as above function will each reorder from both sides
         GPU_DEBUG_LOG_PASS << "Total number of reorders: " << total_reorder_count.number / 2 << std::endl;
         GPU_DEBUG_LOG_PASS << "Total elements count of all reorders: " << total_reorder_count.total_sizes / 2 << std::endl;
@@ -737,37 +747,15 @@ void reorder_inputs::run(program& p, layout_optimizer& lo, reorder_factory& rf) 
 
             for (size_t i = 0; i < detection_output_node.get_dependencies().size(); i++) {
                 auto& input = detection_output_node.get_dependency(i);
+                auto input_layout = input.get_output_layout();
                 auto new_input = rf.get_reorder(input.id(),
-                                                input.get_output_layout(),
-                                                layout{ data_types::f32, format::bfyx, input.get_output_layout().get_tensor() });
+                                                input_layout,
+                                                layout{ input_layout.get_partial_shape(), data_types::f32, format::bfyx });
 
                 if (new_input.first) {
                     p.add_intermediate(new_input.first, detection_output_node, i, !new_input.second);
+                    detection_output_node.recalc_output_layouts();
                 }
-            }
-        }
-    };
-
-    const auto reorder_input_and_weights_binary_convolution = [&p, &rf](typed_program_node<binary_convolution>& binary_conv_node) {
-        auto& input = binary_conv_node.input();
-        auto input_layout = input.get_output_layout();
-        auto new_layout = input_layout;
-        new_layout.data_type = data_types::bin;
-
-        auto reorder = rf.get_reorder(input.id(), input_layout, new_layout);
-
-        if (reorder.first) {
-            p.add_intermediate(reorder.first, binary_conv_node, 0, !reorder.second);
-        }
-
-        auto& weights = binary_conv_node.weights();
-        auto weights_layout = weights.get_output_layout();
-        if (!weights.is_type<data>() && !weights.is_constant()) {
-            auto new_layout = layout{ weights_layout.get_partial_shape(), data_types::bin, format::b_fs_yx_32fp };
-            auto reorder = rf.get_reorder(weights.id(), weights_layout, new_layout);
-            if (reorder.first) {
-                p.add_intermediate(reorder.first, binary_conv_node, 1, !reorder.second);
-                p.get_or_create(reorder.first).recalc_output_layouts(false);
             }
         }
     };
@@ -778,9 +766,10 @@ void reorder_inputs::run(program& p, layout_optimizer& lo, reorder_factory& rf) 
         auto new_format = lo.get_preferred_format(deconv_node);
         if (new_format == format::b_fs_zyx_fsv16 || new_format == format::bs_fs_zyx_bsv16_fsv16) {
             auto reorder = rf.get_reorder(input.id(), input_layout,
-                layout{ input_layout.data_type, new_format, input_layout.get_tensor() });
+                layout{ input_layout.get_partial_shape(), input_layout.data_type, new_format });
             if (reorder.first) {
                 p.add_intermediate(reorder.first, deconv_node, 0, !reorder.second);
+                deconv_node.recalc_output_layouts();
             }
         }
 
@@ -903,7 +892,8 @@ void reorder_inputs::run(program& p, layout_optimizer& lo, reorder_factory& rf) 
             new_layout.data_type = data_types::f32;
             auto new_input = rf.get_reorder(input.id(), input_layout, new_layout);
             if (new_input.first) {
-               p.add_intermediate(new_input.first, fc_node, 0);
+               p.add_intermediate(new_input.first, fc_node, 0, !new_input.second);
+               fc_node.recalc_output_layouts();
             }
         }
 
@@ -921,27 +911,68 @@ void reorder_inputs::run(program& p, layout_optimizer& lo, reorder_factory& rf) 
 
     const auto reorder_input_pooling = [&p, &rf](typed_program_node<pooling>& pooling_node) {
         // Change input data type of pooling node from i32 to f32
-        auto& input = pooling_node.input();
-        auto input_layout = input.get_output_layout();
+        auto dep = pooling_node.get_dependency_with_port(0);
+        const auto& input = dep.first;
+        auto input_layout = input->get_output_layout();
         if (pooling_node.get_primitive()->mode == pooling_mode::max && input_layout.data_type == data_types::i32) {
             auto new_layout = input_layout;
             new_layout.data_type = data_types::f32;
-            auto new_input = rf.get_reorder(input.id(), input_layout, new_layout);
+            auto new_input = rf.get_reorder(input->id(), dep.second, input_layout, new_layout);
             if (new_input.first) {
                p.add_intermediate(new_input.first, pooling_node, 0);
+               pooling_node.recalc_output_layouts();
             }
         }
     };
 
+#ifdef ENABLE_ONEDNN_FOR_GPU
+    const auto reorder_input_gemm = [&p, &rf](typed_program_node<gemm>& gemm_node) {
+        if (gemm_node.get_preferred_impl_type() != impl_types::onednn || gemm_node.is_dynamic()
+            || gemm_node.get_preferred_input_fmts().size() < 2) {
+            return;
+        }
+
+        for (size_t idx = 0; idx < 2; ++idx) {
+            auto fmt = gemm_node.get_preferred_input_fmts()[idx];
+            if (fmt != format::type::any && !format::is_simple_data_format(fmt)) {
+                return;
+            }
+        }
+
+        for (size_t idx = 0; idx < 2; idx++) {
+            auto dep = gemm_node.get_dependency_with_port(idx);
+            const auto& input = dep.first;
+            auto input_layout = input->get_output_layout();
+
+            if (input_layout.is_dynamic())
+                continue;
+
+            if (!input->is_constant() && !format::is_simple_data_format(input_layout.format)) {
+                auto new_layout = input_layout;
+                new_layout.format = format::get_default_format(input_layout.get_rank());
+                auto new_input = rf.get_reorder(input->id(), dep.second, input_layout, new_layout);
+                if (new_input.first) {
+                    p.add_intermediate(new_input.first, gemm_node, idx, !new_input.second);
+                }
+            }
+        }
+    };
+#endif // ENABLE_ONEDNN_FOR_GPU
+
     for (auto& prim : p.get_processing_order()) {
-        program_helpers::do_for_types<detection_output, binary_convolution, deconvolution, convolution, fully_connected, pooling>(
+        program_helpers::do_for_types<detection_output, deconvolution, convolution, fully_connected, pooling>(
             *prim,
             reorder_input_detection_output,
-            reorder_input_and_weights_binary_convolution,
             reorder_input_and_weights_deconvolution,
             reorder_convolution,
             reorder_input_fully_connected,
             reorder_input_pooling);
+
+#ifdef ENABLE_ONEDNN_FOR_GPU
+        program_helpers::do_for_types<gemm>(
+            *prim,
+            reorder_input_gemm);
+#endif // ENABLE_ONEDNN_FOR_GPU
     }
 
     for (auto n : p.get_processing_order()) {
@@ -1010,9 +1041,14 @@ void reorder_inputs::run(program& p, layout_optimizer& lo, reorder_factory& rf) 
                     if (gemm_dims[0] == data_dims[0])
                         continue;
 
+                    auto data_shape = data_layout.get_shape();
+                    if (data_shape.size() && shape_size(data_shape) == 1ul)
+                        continue;
+
                     static size_t idx = 0;
                     const auto prim_id = "broadcast:" + data.id() + "_broadcasted" + std::to_string(idx++);
-                    auto broadcast_prim = std::make_shared<cldnn::broadcast>(prim_id, cldnn::input_info(data.id()), gemm_layout.get_shape(), ov::AxisSet{});
+                    auto broadcast_prim = std::make_shared<cldnn::broadcast>(prim_id, cldnn::input_info(data.id()), gemm_layout.get_shape(),
+                                                                            ov::AxisSet{}, ov::op::BroadcastType::NUMPY);
 
                     auto& broadcast_node = p.get_or_create(broadcast_prim);
                     p.add_intermediate(broadcast_node, *node, fused_prim.outer_dep_start_idx, true);
@@ -1030,6 +1066,15 @@ void reorder_inputs::run(program& p, layout_optimizer& lo, reorder_factory& rf) 
                     if (fc_layout.is_dynamic() || data_layout.is_dynamic())
                         continue;
 
+                    auto same_spatial = [](layout a, layout b) {
+                        if (a.get_spatial_rank() != b.get_spatial_rank())
+                            return false;
+                        for (size_t i = 0; i < a.get_spatial_rank(); i++) {
+                            if (a.spatial(i) != b.spatial(i))
+                                return false;
+                        }
+                        return true;
+                    };
                     // fc_b     | fc_f      | data_b    | data_f    | broadcast condition
                     // ---------+-----------+-----------+-----------+--------------------
                     // 1        | 1         | 1         | 1         | no broadcast
@@ -1045,18 +1090,20 @@ void reorder_inputs::run(program& p, layout_optimizer& lo, reorder_factory& rf) 
                     // N        | 1         | N         | 1         | no broadcast
                     // N        | 1         | N         | N         | N/A
                     // N        | N         | 1         | 1         | implicit broadcast
-                    // N        | N         | 1         | N         | explicit broadcast
-                    // N        | N         | N         | 1         | explicit broadcast
+                    // N        | N         | 1         | N         | explicit broadcast when spatial different
+                    // N        | N         | N         | 1         | explicit broadcast when spatial different
                     // N        | N         | N         | N         | no broadcast
                     if ((fc_layout.batch() == 1 || fc_layout.feature() == 1) ||
                         (data_layout.batch() == 1 && data_layout.feature() == 1) ||
+                        ((data_layout.batch() == 1 || data_layout.feature() == 1) && same_spatial(fc_layout, data_layout)) ||
                         (fc_layout.count() == data_layout.count())) {
                         continue;
                     }
 
                     static size_t idx = 0;
                     const auto prim_id = "broadcast:" + data.id() + "_broadcasted" + std::to_string(idx++);
-                    auto broadcast_prim = std::make_shared<cldnn::broadcast>(prim_id, cldnn::input_info(data.id()), fc_layout.get_shape(), ov::AxisSet{});
+                    auto broadcast_prim = std::make_shared<cldnn::broadcast>(prim_id, cldnn::input_info(data.id()), fc_layout.get_shape(),
+                                                                            ov::AxisSet{}, ov::op::BroadcastType::NUMPY);
 
                     auto& broadcast_node = p.get_or_create(broadcast_prim);
                     p.add_intermediate(broadcast_node, *node, fused_prim.outer_dep_start_idx, true);

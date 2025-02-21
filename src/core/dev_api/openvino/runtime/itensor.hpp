@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -68,6 +68,20 @@ public:
     T* data() const {
         return static_cast<T*>(data(element::from<datatype>()));
     }
+
+    /**
+     * @brief Reports whether the tensor is continuous or not
+     *
+     * @return true if tensor is continuous
+     */
+    bool is_continuous() const;
+
+    /**
+     * @brief Copy tensor, destination tensor should have the same element type and shape
+     *
+     * @param dst destination tensor
+     */
+    virtual void copy_to(const std::shared_ptr<ov::ITensor>& dst) const;
 
 protected:
     virtual ~ITensor();

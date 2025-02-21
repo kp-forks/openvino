@@ -1,19 +1,20 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "ngraph/op/util/multi_subgraph_base.hpp"
-
-#include "ngraph/graph_util.hpp"
-#include "ngraph/opsets/opset5.hpp"
+#include "openvino/op/util/multi_subgraph_base.hpp"
 
 ov::op::util::MultiSubGraphOp::InputDescription::InputDescription(uint64_t input_index, uint64_t body_parameter_index)
     : m_input_index(input_index),
       m_body_parameter_index(body_parameter_index) {}
 
+ov::op::util::MultiSubGraphOp::InputDescription::~InputDescription() = default;
+
 ov::op::util::MultiSubGraphOp::OutputDescription::OutputDescription(uint64_t body_value_index, uint64_t output_index)
     : m_body_value_index(body_value_index),
       m_output_index(output_index) {}
+
+ov::op::util::MultiSubGraphOp::OutputDescription::~OutputDescription() = default;
 
 ov::op::util::MultiSubGraphOp::SliceInputDescription::SliceInputDescription(uint64_t input_index,
                                                                             uint64_t body_parameter_index,
@@ -95,7 +96,7 @@ ov::op::util::MultiSubGraphOp::BodyOutputDescription::copy() const {
     return std::make_shared<BodyOutputDescription>(m_body_value_index, m_output_index, m_iteration);
 }
 
-ov::op::util::MultiSubGraphOp::MultiSubGraphOp(const OutputVector& args) : Op(args) {}
+ov::op::util::MultiSubGraphOp::MultiSubGraphOp(const OutputVector& args) : ov::op::Sink(args) {}
 
 ov::op::util::MultiSubGraphOp::MultiSubGraphOp(size_t number_of_bodies) {
     m_bodies.resize(number_of_bodies);
@@ -117,7 +118,7 @@ ov::Input<ov::Node> ov::op::util::MultiSubGraphOp::input_for_value(const Output<
 }
 
 void ov::op::util::MultiSubGraphOp::set_invariant_inputs(const Output<Node>& value,
-                                                         const ngraph::ParameterVector& bodies_parameters) {
+                                                         const ov::ParameterVector& bodies_parameters) {
     auto input_index = input_for_value(value).get_index();
     for (auto& param : bodies_parameters) {
         for (size_t body_index = 0; body_index < m_bodies.size(); ++body_index) {
@@ -155,7 +156,7 @@ void ov::op::util::MultiSubGraphOp::validate_and_infer_type_body(
         auto index = input_description->m_input_index;
 
         auto body_parameter = params.at(input_description->m_body_parameter_index);
-        auto input_partial_shape = input_value(index).get_partial_shape();
+        const auto& input_partial_shape = input_value(index).get_partial_shape();
         auto dtype = input_value(index).get_element_type();
         body_parameter->set_partial_shape(input_partial_shape);
         body_parameter->set_element_type(dtype);

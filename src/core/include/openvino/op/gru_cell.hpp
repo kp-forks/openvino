@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -132,6 +132,10 @@ public:
 
     bool get_linear_before_reset() const {
         return m_linear_before_reset;
+    }
+
+    void set_linear_before_reset(bool linear_before_reset) {
+        m_linear_before_reset = linear_before_reset;
     }
 
 private:

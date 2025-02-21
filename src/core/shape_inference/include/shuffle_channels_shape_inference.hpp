@@ -1,19 +1,19 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #pragma once
 
-#include <openvino/op/shuffle_channels.hpp>
-
 #include "openvino/core/validation_util.hpp"
+#include "openvino/op/shuffle_channels.hpp"
+#include "utils.hpp"
 
 namespace ov {
 namespace op {
 namespace v0 {
 
-template <class TShape>
-std::vector<TShape> shape_infer(const ShuffleChannels* op, const std::vector<TShape>& input_shapes) {
+template <class TShape, class TRShape = result_shape_t<TShape>>
+std::vector<TRShape> shape_infer(const ShuffleChannels* op, const std::vector<TShape>& input_shapes) {
     NODE_VALIDATION_CHECK(op, input_shapes.size() == 1);
 
     const auto& group = op->get_group();
@@ -22,20 +22,18 @@ std::vector<TShape> shape_infer(const ShuffleChannels* op, const std::vector<TSh
     const auto& input_shape = input_shapes[0];
     const auto input_shape_rank = input_shape.rank();
 
-    auto output_shapes = std::vector<TShape>(1, input_shape);
+    auto output_shapes = std::vector<TRShape>(1, input_shape);
 
     if (input_shape_rank.is_static()) {
         NODE_VALIDATION_CHECK(op, input_shape.size() >= 1, "The input tensor's shape is expected to be at least 1D.");
-        OPENVINO_SUPPRESS_DEPRECATED_START
-        const auto axis_zb = static_cast<size_t>(normalize_axis(op, op->get_axis(), input_shape_rank));
-        OPENVINO_SUPPRESS_DEPRECATED_END
+        const auto axis_zb = ov::util::try_normalize_axis(op->get_axis(), input_shape_rank, *op);
         const auto& channel_dim = input_shape[axis_zb];
         NODE_VALIDATION_CHECK(op,
                               channel_dim.is_dynamic() || (channel_dim.get_length() % group) == 0,
                               "The channel dimension size has to be a multiple of the groups parameter value.");
 
         if (std::is_same<TShape, PartialShape>::value) {
-            // overwrite channel dimension to loose label
+            // overwrite channel dimension to loose symbol
             using TDim = typename TShape::value_type;
             output_shapes.front()[axis_zb] = TDim{channel_dim.get_min_length(), channel_dim.get_max_length()};
         }
@@ -43,14 +41,6 @@ std::vector<TShape> shape_infer(const ShuffleChannels* op, const std::vector<TSh
 
     return output_shapes;
 }
-
-template <class TShape>
-void shape_infer(const ShuffleChannels* op,
-                 const std::vector<TShape>& input_shapes,
-                 std::vector<TShape>& output_shapes) {
-    output_shapes = shape_infer(op, input_shapes);
-}
-
 }  // namespace v0
 }  // namespace op
 }  // namespace ov

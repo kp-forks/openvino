@@ -1,21 +1,60 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #pragma once
 
-#include <ie_layouts.h>
+#include <ostream>
+#include <tuple>
 #include "intel_gpu/runtime/layout.hpp"
-#include "openvino/core/layout.hpp"
+#include "intel_gpu/runtime/memory.hpp"
 
-#include "ngraph/type/element_type.hpp"
+#include "intel_gpu/runtime/shape_predictor.hpp"
+#include "intel_gpu/runtime/engine.hpp"
+#include "intel_gpu/runtime/device_info.hpp"
+#include "openvino/core/layout.hpp"
+#include "openvino/core/node.hpp"
+#include "openvino/core/type/element_type.hpp"
 
 namespace ov {
 namespace intel_gpu {
 
+enum class TensorType {
+    BT_EMPTY,
+    BT_BUF_INTERNAL,
+    BT_BUF_SHARED,
+    BT_USM_SHARED,
+    BT_USM_HOST_INTERNAL,
+    BT_USM_DEVICE_INTERNAL,
+    BT_IMG_SHARED,
+    BT_SURF_SHARED,
+    BT_DX_BUF_SHARED,
+};
+
 #define TensorValue(val) static_cast<cldnn::tensor::value_type>(val)
 
-inline cldnn::tensor tensor_from_dims(const InferenceEngine::SizeVector& dims, int def = 1) {
+inline bool can_use_usm_host(cldnn::engine& engine, const uint64_t total_output_bytes) {
+    GPU_DEBUG_IF(ExecutionConfig::get_usm_policy() == 1) { return true; }
+    GPU_DEBUG_IF(ExecutionConfig::get_usm_policy() == 2) { return false; }
+
+    auto can_use_usm = engine.use_unified_shared_memory();
+    // When output size is large, it is better not to write to usm_host directly
+    const uint64_t LARGE_OUTPUT_BYTES_THRESHOLD = 4 * 1048576;
+
+    const auto& device_info = engine.get_device_info();
+    if ((device_info.gfx_ver.major == 12 && device_info.gfx_ver.minor == 60) ||
+        (device_info.gfx_ver.major >= 20 && device_info.dev_type == cldnn::device_type::discrete_gpu) ||
+        (device_info.dev_type == cldnn::device_type::discrete_gpu && total_output_bytes > LARGE_OUTPUT_BYTES_THRESHOLD)) {
+        // WA: Disable USM host memory for infer request`s tensors for PVC and subsequent dGPUs, as kernel access
+        // to system memory is slower than using an explicit memcpy (Host <-> Device) call with the copy engine
+        // Driver tickets with additional details: 6155, 10054
+        GPU_DEBUG_TRACE << "Do not use usm_host for performance issue" << std::endl;
+        can_use_usm = false;
+    }
+
+    return can_use_usm;
+}
+inline cldnn::tensor tensor_from_dims(const ov::Shape& dims, int def = 1) {
     switch (dims.size()) {
     case 0: return cldnn::tensor(cldnn::batch(def), cldnn::feature(def), cldnn::spatial(def, def));
     case 1: return cldnn::tensor(cldnn::batch(dims[0]), cldnn::feature(def), cldnn::spatial(def, def));
@@ -24,136 +63,67 @@ inline cldnn::tensor tensor_from_dims(const InferenceEngine::SizeVector& dims, i
     case 4: return cldnn::tensor(cldnn::batch(dims[0]), cldnn::feature(dims[1]), cldnn::spatial(dims[3], dims[2]));
     case 5: return cldnn::tensor(cldnn::batch(dims[0]), cldnn::feature(dims[1]), cldnn::spatial(dims[4], dims[3], dims[2]));
     case 6: return cldnn::tensor(cldnn::batch(dims[0]), cldnn::feature(dims[1]), cldnn::spatial(dims[5], dims[4], dims[3], dims[2]));
-    default: IE_THROW() << "Invalid dimensions size(" << dims.size() << ") for gpu tensor";
+    default: OPENVINO_THROW("Invalid dimensions size(", dims.size(), ") for gpu tensor");
     }
 }
 
-inline cldnn::data_types DataTypeFromPrecision(InferenceEngine::Precision p) {
-    switch (p) {
-    case InferenceEngine::Precision::I16:
-    case InferenceEngine::Precision::U16:
-    case InferenceEngine::Precision::FP32:
-    case InferenceEngine::Precision::FP64:
-        return cldnn::data_types::f32;
-    case InferenceEngine::Precision::FP16:
-        return cldnn::data_types::f16;
-    case InferenceEngine::Precision::U8:
-        return cldnn::data_types::u8;
-    case InferenceEngine::Precision::I8:
-        return cldnn::data_types::i8;
-    case InferenceEngine::Precision::I32:
-    case InferenceEngine::Precision::U32:
-    case InferenceEngine::Precision::U64:
-        return cldnn::data_types::i32;
-    case InferenceEngine::Precision::I64:
-        return cldnn::data_types::i64;
-    case InferenceEngine::Precision::BIN:
-        return cldnn::data_types::bin;
-    case InferenceEngine::Precision::BOOL:
-        return cldnn::data_types::i8;
-    default:
-        IE_THROW(ParameterMismatch)
-            << "The plugin does not support " << p.name() << " precision";
+template<typename T, typename V>
+std::tuple<V, V, V> get_xyz(const T data, V def) {
+    switch (data.size()) {
+        case 1:  return std::make_tuple(def,                     static_cast<V>(data[0]), def);
+        case 2:  return std::make_tuple(static_cast<V>(data[1]), static_cast<V>(data[0]), def);
+        case 3:  return std::make_tuple(static_cast<V>(data[2]), static_cast<V>(data[1]), static_cast<V>(data[0]));
+        default: return std::make_tuple(def,                     def,                     def);
     }
 }
 
-inline InferenceEngine::Precision PrecisionFromDataType(cldnn::data_types dt) {
-    switch (dt) {
-    case cldnn::data_types::bin:
-        return InferenceEngine::Precision::ePrecision::BIN;
-    case cldnn::data_types::u8:
-        return InferenceEngine::Precision::ePrecision::U8;
-    case cldnn::data_types::i8:
-        return InferenceEngine::Precision::ePrecision::I8;
-    case cldnn::data_types::f16:
-        return InferenceEngine::Precision::ePrecision::FP16;
-    case cldnn::data_types::f32:
-        return InferenceEngine::Precision::ePrecision::FP32;
-    case cldnn::data_types::i32:
-        return InferenceEngine::Precision::ePrecision::I32;
-    case cldnn::data_types::i64:
-        return InferenceEngine::Precision::ePrecision::I64;
-    default:
-        IE_THROW(ParameterMismatch) << "The plugin does not support " << cldnn::data_type_traits::name(dt) << " data type";
+inline cldnn::layout make_layout(const ov::element::Type type, const ov::Shape& shape) {
+    return cldnn::layout{ov::PartialShape{shape},
+                         cldnn::element_type_to_data_type(type),
+                         cldnn::format::get_default_format(shape.size())};
+}
+
+inline ov::element::Type convert_to_supported_device_type(ov::element::Type et) {
+    switch (et) {
+        case ov::element::f64:
+            return ov::element::f32;
+        case ov::element::u64:
+            return ov::element::i32;
+        default: return et;
     }
 }
 
-inline cldnn::format FormatFromLayout(InferenceEngine::Layout l) {
-    switch (l) {
-        // TODO: change 6d case once new layout added in IE
-    case InferenceEngine::Layout::BLOCKED:
-        return cldnn::format::bfwzyx;
-    case InferenceEngine::Layout::NCDHW:
-        return cldnn::format::bfzyx;
-    case InferenceEngine::Layout::NCHW:
-    case InferenceEngine::Layout::NC:
-    case InferenceEngine::Layout::CHW:
-    case InferenceEngine::Layout::C:
-    case InferenceEngine::Layout::SCALAR:
-        return cldnn::format::bfyx;
-    case InferenceEngine::Layout::NHWC:
-        return cldnn::format::byxf;
-    default:
-        IE_THROW(ParameterMismatch) << "The plugin does not support " << l << " layout";
-    }
+bool is_supported(ov::element::Type_t et);
+bool data_types_are_supported(const ov::Node* node);
+
+using PrecisionMap = std::map<ov::element::Type_t, ov::element::Type>;
+
+std::vector<cldnn::optional_data_type> get_output_data_types(const ov::Node* op, PrecisionMap precision_map = {});
+
+inline std::vector<cldnn::optional_data_type> get_output_data_types(const std::shared_ptr<ov::Node>& op, PrecisionMap precision_map = {}) {
+    return get_output_data_types(op.get(), precision_map);
 }
 
-inline cldnn::format FormatFromTensorDesc(InferenceEngine::TensorDesc desc) {
-    switch (desc.getLayout()) {
-    case InferenceEngine::Layout::BLOCKED: {
-        if (desc.getDims().size() == 6)
-            return cldnn::format::bfwzyx;
-        else if (desc.getDims().size() == 5)
-            return cldnn::format::bfzyx;
-        else if (desc.getDims().size() <= 4)
-            return cldnn::format::bfyx;
+inline ov::Shape get_tensor_shape(const ov::PartialShape& pshape) {
+    ov::Shape res(pshape.size());
+    for (size_t i = 0; i < pshape.size(); i++) {
+        res[i] = pshape[i].is_dynamic() ? 0 : pshape[i].get_length();
     }
-    case InferenceEngine::Layout::NCDHW:
-        return cldnn::format::bfzyx;
-    case InferenceEngine::Layout::NCHW:
-    case InferenceEngine::Layout::NC:
-    case InferenceEngine::Layout::CHW:
-    case InferenceEngine::Layout::C:
-    case InferenceEngine::Layout::SCALAR:
-        return cldnn::format::bfyx;
-    case InferenceEngine::Layout::NHWC:
-        return cldnn::format::byxf;
-    default:
-        IE_THROW(ParameterMismatch)
-            << "The plugin does not support " << desc.getLayout() << " layout";
-    }
+
+    return res;
 }
 
-inline cldnn::format ImageFormatFromLayout(InferenceEngine::Layout l) {
-    switch (l) {
-    // currently, nv12 is the only supported image layout
-    case InferenceEngine::Layout::BLOCKED:
-    case InferenceEngine::Layout::NCDHW:
-    case InferenceEngine::Layout::NCHW:
-    case InferenceEngine::Layout::NC:
-    case InferenceEngine::Layout::CHW:
-    case InferenceEngine::Layout::C:
-    case InferenceEngine::Layout::NHWC:
-        return cldnn::format::nv12;
-    default:
-        IE_THROW(ParameterMismatch)
-            << "The plugin does not support " << l << " image layout";
+inline ov::Shape predict_shape(const std::string& name, const cldnn::layout layout, cldnn::ShapePredictor& shape_predictor) {
+    auto prealloc_info = shape_predictor.predict_preallocation_shape(name, layout, false);
+    const auto& preallocation_shape = prealloc_info.second;
+    auto can_preallocate_buffer = prealloc_info.first &&
+                                    shape_predictor.can_preallocate(cldnn::ceil_div(ov::shape_size(preallocation_shape) *
+                                    ov::element::Type(layout.data_type).bitwidth(), 8));
+    if (can_preallocate_buffer) {
+        return preallocation_shape;
     }
-}
 
-inline InferenceEngine::Layout InferenceEngineLayoutFromOVLayout(ov::Layout l) {
-    if (l == ov::Layout("C")) return InferenceEngine::Layout::C;
-    if (l == ov::Layout("CN")) return InferenceEngine::Layout::CN;
-    if (l == ov::Layout("HW")) return InferenceEngine::Layout::HW;
-    if (l == ov::Layout("NC")) return InferenceEngine::Layout::NC;
-    if (l == ov::Layout("CHW")) return InferenceEngine::Layout::CHW;
-    if (l == ov::Layout("HWC")) return InferenceEngine::Layout::HWC;
-    if (l == ov::Layout("NCHW")) return InferenceEngine::Layout::NCHW;
-    if (l == ov::Layout("NC??")) return InferenceEngine::Layout::NCHW;
-    if (l == ov::Layout("NHWC")) return InferenceEngine::Layout::NHWC;
-    if (l == ov::Layout("NCDHW")) return InferenceEngine::Layout::NCDHW;
-    if (l == ov::Layout("NDHWC")) return InferenceEngine::Layout::NDHWC;
-    IE_THROW() << "The plugin does not support " << l.to_string() << " layout";
+    return layout.get_shape();
 }
 
 /// WA: Force exit. Any opencl api call can be hang after CL_OUT_OF_RESOURCES.
@@ -167,5 +137,21 @@ inline void ForceExit() {
     std::_Exit(-1);
 }
 
+void convert_and_copy(
+    const ov::ITensor* src,
+    cldnn::memory::ptr dst,
+    cldnn::stream& stream,
+    const cldnn::layout& src_layout = cldnn::layout({}, ov::element::dynamic, cldnn::format::bfyx, cldnn::padding()));
+void convert_and_copy(const cldnn::memory::ptr src, ov::ITensor const* dst, const cldnn::stream& stream);
+void convert_and_copy(const ov::ITensor* src, ov::ITensor* dst, const cldnn::stream& stream);
+void convert_and_copy(const cldnn::memory::ptr src, cldnn::memory::ptr dst, cldnn::stream& stream);
+
 }  // namespace intel_gpu
+
+inline std::ostream& operator<<(std::ostream& os, const ov::AnyMap& params) {
+    for (const auto& p : params) {
+        os << p.first << " : " << p.second.as<std::string>() << std::endl;
+    }
+    return os;
+}
 }  // namespace ov

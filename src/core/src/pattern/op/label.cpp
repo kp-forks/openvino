@@ -1,30 +1,28 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "ngraph/pattern/op/label.hpp"
+#include "openvino/pass/pattern/op/label.hpp"
 
-#include "ngraph/pattern/matcher.hpp"
-#include "ngraph/pattern/op/or.hpp"
-#include "ngraph/pattern/op/true.hpp"
-
-using namespace std;
+#include "openvino/pass/pattern/matcher.hpp"
+#include "openvino/pass/pattern/op/or.hpp"
+#include "openvino/pass/pattern/op/true.hpp"
 
 ov::Output<ov::Node> ov::pass::pattern::op::Label::wrap_values(const ov::OutputVector& wrapped_values) {
     switch (wrapped_values.size()) {
     case 0:
-        return make_shared<pattern::op::True>()->output(0);
+        return std::make_shared<pattern::op::True>()->output(0);
     case 1:
         return wrapped_values[0];
     default:
-        return make_shared<pattern::op::Or>(wrapped_values)->output(0);
+        return std::make_shared<pattern::op::Or>(wrapped_values)->output(0);
     }
 }
 
 bool ov::pass::pattern::op::Label::match_value(ov::pass::pattern::Matcher* matcher,
                                                const ov::Output<ov::Node>& pattern_value,
                                                const ov::Output<ov::Node>& graph_value) {
-    if (m_predicate(graph_value)) {
+    if (m_predicate(matcher->get_symbols(), graph_value)) {
         auto& pattern_map = matcher->get_pattern_value_map();
         auto saved = matcher->start_match();
         matcher->add_node(graph_value);
@@ -40,8 +38,4 @@ bool ov::pass::pattern::op::Label::match_value(ov::pass::pattern::Matcher* match
 
 std::shared_ptr<ov::Node> ov::pass::pattern::any_input() {
     return std::make_shared<pattern::op::Label>();
-}
-
-std::shared_ptr<ov::Node> ov::pass::pattern::any_input(const ov::pass::pattern::op::ValuePredicate& pred) {
-    return std::make_shared<pattern::op::Label>(element::dynamic, PartialShape::dynamic(), pred);
 }

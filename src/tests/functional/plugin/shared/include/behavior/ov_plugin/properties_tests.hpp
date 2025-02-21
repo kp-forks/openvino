@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -56,7 +56,7 @@ public:
     AnyMap compileModelProperties;
 };
 
-class OVPropertiesTestsWithComplieModelProps : public testing::WithParamInterface<PropertiesParams>,
+class OVPropertiesTestsWithCompileModelProps : public testing::WithParamInterface<PropertiesParams>,
                                                public OVPropertiesBase {
 public:
     static std::string getTestCaseName(testing::TestParamInfo<PropertiesParams> obj);
@@ -67,20 +67,24 @@ public:
 
     AnyMap compileModelProperties;
 
-    static std::vector<ov::AnyMap> getROMandatoryProperties();
-    static std::vector<ov::AnyMap> getROOptionalProperties();
+    static std::vector<ov::AnyMap> getROMandatoryProperties(bool is_sw_device = false);
+    static std::vector<ov::AnyMap> getROOptionalProperties(bool is_sw_device = false);
     static std::vector<ov::AnyMap> configureProperties(std::vector<std::string> props);
 
-    static std::vector<ov::AnyMap> getRWMandatoryPropertiesValues(std::vector<std::string> props = {});
-    static std::vector<ov::AnyMap> getRWOptionalPropertiesValues(std::vector<std::string> props = {});
+    static std::vector<ov::AnyMap> getRWMandatoryPropertiesValues(const std::vector<std::string>& props = {}, bool is_sw_device = false);
+    static std::vector<ov::AnyMap> getWrongRWMandatoryPropertiesValues(const std::vector<std::string>& props = {}, bool is_sw_device = false);
+    static std::vector<ov::AnyMap> getRWOptionalPropertiesValues(const std::vector<std::string>& props = {}, bool is_sw_device = false);
+    static std::vector<ov::AnyMap> getWrongRWOptionalPropertiesValues(const std::vector<std::string>& props = {}, bool is_sw_device = false);
 
     static std::vector<ov::AnyMap> getModelDependcePropertiesValues();
 };
 
-using OVCheckSetSupportedRWMetricsPropsTests = OVPropertiesTestsWithComplieModelProps;
-using OVCheckGetSupportedROMetricsPropsTests = OVPropertiesTestsWithComplieModelProps;
-using OVCheckChangePropComplieModleGetPropTests_DEVICE_ID = OVPropertiesTestsWithComplieModelProps;
-using OVCheckMetricsPropsTests_ModelDependceProps = OVPropertiesTestsWithComplieModelProps;
+using OVCheckSetSupportedRWMetricsPropsTests = OVPropertiesTestsWithCompileModelProps;
+using OVCheckSetIncorrectRWMetricsPropsTests = OVPropertiesTestsWithCompileModelProps;
+using OVCheckGetSupportedROMetricsPropsTests = OVPropertiesTestsWithCompileModelProps;
+using OVCheckChangePropComplieModleGetPropTests_DEVICE_ID = OVPropertiesTestsWithCompileModelProps;
+using OVCheckChangePropComplieModleGetPropTests_InferencePrecision = OVPropertiesTestsWithCompileModelProps;
+using OVCheckMetricsPropsTests_ModelDependceProps = OVPropertiesTestsWithCompileModelProps;
 
 class OVClassSetDefaultDeviceIDPropTest : public OVPluginTestBase,
                                           public ::testing::WithParamInterface<std::pair<std::string, std::string>> {
@@ -101,8 +105,8 @@ using OVClassCompileModelWithCondidateDeviceListContainedMetaPluginTest = OVClas
 using OVClassCompileModelReturnDefaultHintTest = OVClassSetDevicePriorityConfigPropsTest;
 using OVClassCompileModelDoNotReturnDefaultHintTest = OVClassSetDevicePriorityConfigPropsTest;
 using OVClassCompileModelAndCheckSecondaryPropertiesTest = OVClassSetDevicePriorityConfigPropsTest;
-
 using OVGetConfigTest = OVClassBaseTestP;
+using OVSpecificDeviceSetConfigTest = OVClassBaseTestP;
 using OVSpecificDeviceGetConfigTest = OVClassBaseTestP;
 using OVGetAvailableDevicesPropsTest = OVClassBaseTestP;
 using OVGetMetricPropsTest = OVClassBaseTestP;
@@ -121,12 +125,14 @@ public:
         std::tie(pluginName, target_device) = GetParam();
         SKIP_IF_CURRENT_TEST_IS_DISABLED();
         APIBaseTest::SetUp();
-        pluginName += IE_BUILD_POSTFIX;
-        if (pluginName == (std::string("openvino_template_plugin") + IE_BUILD_POSTFIX)) {
-            pluginName = ov::util::make_plugin_library_name(CommonTestUtils::getExecutableDirectory(), pluginName);
+        pluginName += OV_BUILD_POSTFIX;
+        if (pluginName == (std::string("openvino_template_plugin") + OV_BUILD_POSTFIX)) {
+            pluginName = ov::util::make_plugin_library_name(ov::test::utils::getExecutableDirectory(), pluginName);
         }
     }
 };
+
+using OVClassSeveralDevicesTestDefaultCore = OVClassSeveralDevicesTests;
 
 }  // namespace behavior
 }  // namespace test

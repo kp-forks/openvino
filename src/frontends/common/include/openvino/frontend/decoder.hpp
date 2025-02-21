@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -35,6 +35,12 @@ struct Str {};
 
 struct PyNone {};
 
+struct PyScalar {
+    PyScalar() = default;
+    explicit PyScalar(const Any& _element_type) : element_type(_element_type) {}
+    Any element_type;
+};
+
 struct Optional;
 struct Dict;
 struct NamedTuple;
@@ -43,12 +49,12 @@ struct Union;
 }  // namespace type
 
 /// Plays a role of node, block and module decoder
-class IDecoder {
+class FRONTEND_API IDecoder {
 public:
-    virtual ~IDecoder() = default;
+    virtual ~IDecoder();
 };
 
-class FRONTEND_API DecoderBase {
+class FRONTEND_API DecoderBase : public IDecoder {
 public:
     using OpTypeByName = std::unordered_map<std::string, std::string>;
     /// \brief Get attribute value by name

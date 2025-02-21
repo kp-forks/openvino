@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -8,6 +8,8 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <fstream>
+#include "intel_gpu/runtime/execution_config.hpp"
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -18,9 +20,7 @@
 #endif
 
 #include <windows.h>
-#include "Psapi.h"
-#elif !defined(__APPLE__) && !defined(__MACOSX)
-#include <fstream>
+#include "psapi.h"
 #endif
 
 #include "layout.hpp"
@@ -120,7 +120,9 @@ struct perf_counter_key {
     std::vector<layout> output_layouts;
     std::string impl_name;
     pipeline_stage stage;
+    int64_t iteration_num;
     bool cache_hit;
+    std::string memalloc_info;
 };
 
 struct perf_counter_hash {
@@ -128,6 +130,7 @@ struct perf_counter_hash {
         size_t seed = 0;
         seed = hash_combine(seed, static_cast<std::underlying_type<instrumentation::pipeline_stage>::type>(k.stage));
         seed = hash_combine(seed, static_cast<int>(k.cache_hit));
+        seed = hash_combine(seed, k.iteration_num);
         for (auto& layout : k.network_input_layouts) {
             for (auto& d : layout.get_shape()) {
                 seed = hash_combine(seed, d);
@@ -155,6 +158,7 @@ public:
         , _obj(obj)
         , _stage(stage) {
         GPU_DEBUG_IF(profiling_enabled) {
+            _per_iter_mode = GPU_DEBUG_VALUE_OR(ov::intel_gpu::ExecutionConfig::get_dump_profiling_data_per_iter(), false);
             _start = std::chrono::high_resolution_clock::now();
         }
     }
@@ -168,10 +172,11 @@ public:
             auto custom_stage_duration = std::chrono::duration_cast<us>(custom_duration).count();
             auto total_duration = custom_stage_duration == 0 ? stage_duration
                                                              : custom_stage_duration;
-            _obj.add_profiling_data(_stage, cache_hit, total_duration);
+            _obj.add_profiling_data(_stage, cache_hit, memalloc_info, total_duration, _per_iter_mode);
         }
     }
     void set_cache_hit(bool val = true) { cache_hit = val; }
+    void add_memalloc_info(std::string info = "") { memalloc_info += info; }
     void set_custom_stage_duration(std::chrono::nanoseconds duration) { custom_duration = duration; }
 
 private:
@@ -181,7 +186,9 @@ private:
     std::chrono::nanoseconds custom_duration = {};
     ProfiledObjectType& _obj;
     instrumentation::pipeline_stage _stage;
+    bool _per_iter_mode = false;
     bool cache_hit = false;
+    std::string memalloc_info = "";
 };
 
 class mem_usage_logger {
@@ -235,7 +242,7 @@ private:
         GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc));
         footprint.rss = (int64_t)(pmc.WorkingSetSize/1024);
         footprint.peak_rss = (int64_t)(pmc.PeakWorkingSetSize/1024);
-#elif !defined(__APPLE__) && !defined(__MACOSX)
+#elif !defined(__APPLE__)
         std::ifstream status("/proc/self/status");
         if (!status.is_open())
             return footprint;

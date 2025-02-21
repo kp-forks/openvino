@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -26,16 +26,19 @@ void padding(const TOp* op, const TContainer& pads_begin, const TContainer& pads
                           pads_end.size());
 }
 
+template <class TOp>
+constexpr bool has_torch_ceil_mode() {
+    return std::is_same<TOp, v14::AvgPool>::value || std::is_same<TOp, v14::MaxPool>::value;
+}
+
 template <class TOp, class TShape>
 void attributes(const TOp* op, const TShape& data_shape, const Strides& dilations) {
     const auto& data_rank = data_shape.rank();
 
-    OPENVINO_SUPPRESS_DEPRECATED_START
     NODE_VALIDATION_CHECK(op,
-                          is_rank_compatible_any_of(data_rank, {3, 4, 5}),
+                          ov::util::is_rank_compatible_any_of(data_rank, {3, 4, 5}),
                           "Expected a 3D, 4D or 5D tensor for the input. Got: ",
                           data_shape);
-    OPENVINO_SUPPRESS_DEPRECATED_END
 
     const auto& kernel = op->get_kernel();
     const auto num_spatial = kernel.size();
@@ -64,6 +67,10 @@ void attributes(const TOp* op, const TShape& data_shape, const Strides& dilation
                           std::none_of(dilations.cbegin(), dilations.cend(), is_zero),
                           "Kernel dilations has zero dimension(s). ",
                           dilations);
+    if (!has_torch_ceil_mode<TOp>()) {
+        const auto is_ceil_torch = op->get_rounding_type() == RoundingType::CEIL_TORCH;
+        NODE_VALIDATION_CHECK(op, !is_ceil_torch, "Rounding CEIL_TORCH is not supported.");
+    }
 }
 }  // namespace validate
 
@@ -108,7 +115,7 @@ void apply_padding(const TOp* op,
         pads_begin.reserve(num_spatial);
         pads_end.reserve(num_spatial);
 
-        auto data_dim = data_shape.cbegin() + spatial_dim_offset;
+        auto data_dim = &data_shape[spatial_dim_offset];
         auto pad_b = auto_pad == PadType::SAME_UPPER ? pads_begin.begin() : pads_end.begin();
         auto pad_e = auto_pad == PadType::SAME_UPPER ? pads_end.begin() : pads_begin.begin();
 
@@ -153,6 +160,50 @@ void valid_dilated_kernel_with_padding(const TOp* op,
                                        const size_t pad_end,
                                        const size_t axis) {}
 
+template <class TDim>
+void align_ceil_torch_dimension_size(TDim& dim,
+                                     const size_t last_pooling_start_index,
+                                     const size_t data_dim_length,
+                                     const size_t pads_begin) {
+    if (!(last_pooling_start_index > data_dim_length + pads_begin - 1) && !ov::util::dim::is_inf_bound(dim)) {
+        dim += 1;
+    }
+}
+
+template <class TDim>
+TDim disallow_pooling_start_in_padding(const TDim& dim,
+                                       const size_t stride,
+                                       const TDim* data_dim,
+                                       const size_t pads_begin) {
+    // Ensure the last pooling doesn't start in padding.
+    auto dim_min_length = dim.get_min_length();
+    const auto last_pooling_min_start_index = dim_min_length * stride;
+    const auto data_dim_min_length = data_dim->get_min_length();
+    align_ceil_torch_dimension_size(dim_min_length, last_pooling_min_start_index, data_dim_min_length, pads_begin);
+    if (data_dim->is_static()) {
+        return TDim(dim_min_length);
+    } else {
+        Dimension::value_type dim_max_length;
+        if (data_dim->get_interval().has_upper_bound()) {
+            dim_max_length = dim.get_max_length();
+            const auto last_pooling_max_start_index = dim_max_length * stride;
+            const auto data_dim_max_length = data_dim->get_max_length();
+            align_ceil_torch_dimension_size(dim_max_length,
+                                            last_pooling_max_start_index,
+                                            data_dim_max_length,
+                                            pads_begin);
+        } else {
+            dim_max_length = -1;
+        }
+        return TDim(dim_min_length, dim_max_length);
+    }
+}
+
+template <class TDim>
+TDim allow_pooling_start_in_padding(const TDim& dim, const size_t, const TDim*, const size_t) {
+    return dim + 1;
+}
+
 /**
  * @brief Append spatial shape to the end of output shape for pooling operator shape inference result.
  *
@@ -163,24 +214,29 @@ void valid_dilated_kernel_with_padding(const TOp* op,
  * @param dilations   Kernel dilations.
  * @param out_shape   Output shape for appending the spatial shape of pooling
  */
-template <class TOp, class TShape, class TContainer>
+template <class TOp, class TShape, class TContainer, class TRShape>
 void append_spatial_shape(const TOp* op,
                           const TShape& data_shape,
                           const TContainer& pads_begin,
                           const TContainer& pads_end,
                           const Strides& dilations,
-                          TShape& out_shape) {
+                          TRShape& out_shape) {
     using namespace ov::util;
     const auto spatial_num = data_shape.size() - spatial_dim_offset;
-    const auto is_ceil_mode = op->get_rounding_type() == RoundingType::CEIL;
+    const auto is_ceil_torch_mode = op->get_rounding_type() == RoundingType::CEIL_TORCH;
+    const auto is_ceil_mode = op->get_rounding_type() == RoundingType::CEIL || is_ceil_torch_mode;
     const auto is_auto_pad = (op->get_auto_pad() == PadType::SAME_UPPER) || (op->get_auto_pad() == PadType::SAME_LOWER);
 
     using TDim = typename TShape::value_type;
     const auto& dim_divide = is_ceil_mode ? dim::ceil_div<TDim> : dim::floor_div<TDim>;
 
-    auto data_dim = data_shape.cbegin() + spatial_dim_offset;
+    auto data_dim = &data_shape[spatial_dim_offset];
     const auto& kernel = op->get_kernel();
     const auto& stride = op->get_strides();
+
+    // Torch CEIL rounding disallows the last pooling operation from starting in the pads area.
+    auto set_pooling_ceil_behavior =
+        is_ceil_torch_mode ? &disallow_pooling_start_in_padding<TDim> : &allow_pooling_start_in_padding<TDim>;
 
     for (size_t i = 0; i < spatial_num; ++i, ++data_dim) {
         if (data_dim->is_static() || !is_auto_pad) {
@@ -194,8 +250,7 @@ void append_spatial_shape(const TOp* op,
 
             dim = dim - kernel_dilated;
             dim = dim_divide(dim, stride[i]);
-            dim += 1;
-            out_shape.push_back(std::move(dim));
+            out_shape.push_back(set_pooling_ceil_behavior(dim, stride[i], data_dim, pads_begin[i]));
         } else {
             // If dimension is interval and is auto pad then result is dynamic shape as padding values are not correct.
             // Operator cannot keep separate auto padding values for upper, lower bounds.
@@ -207,14 +262,14 @@ void append_spatial_shape(const TOp* op,
 /**
  * @brief Shape inference helper used for pooling operators such Max Pool, Avg Pool.
  */
-template <class TOp, class TShape, class TContainer>
-TShape out_shape_infer(const TOp* op,
-                       const TShape& data_shape,
-                       const TContainer& pads_begin,
-                       const TContainer& pads_end,
-                       const Strides& dilations) {
+template <class TOp, class TShape, class TContainer, class TRShape = result_shape_t<TShape>>
+TRShape out_shape_infer(const TOp* op,
+                        const TShape& data_shape,
+                        const TContainer& pads_begin,
+                        const TContainer& pads_end,
+                        const Strides& dilations) {
     const auto out_rank_size = spatial_dim_offset + op->get_kernel().size();
-    TShape out_shape;
+    TRShape out_shape;
     if (data_shape.rank().is_static()) {
         const auto& batch_size = data_shape[0];
         const auto& channel_count = data_shape[1];
@@ -239,11 +294,10 @@ TShape out_shape_infer(const TOp* op,
  */
 template <class TShape,
           class TOp,
+          class TRShape = result_shape_t<TShape>,
           typename std::enable_if<std::is_same<TOp, v8::AdaptiveAvgPool>::value ||
                                   std::is_same<TOp, v8::AdaptiveMaxPool>::value>::type* = nullptr>
-TShape out_shape_infer(const TOp* op,
-                       const std::vector<TShape>& input_shapes,
-                       const std::map<size_t, HostTensorPtr>& constant_data = {}) {
+TRShape out_shape_infer(const TOp* op, const std::vector<TShape>& input_shapes, const ITensorAccessor& ta) {
     NODE_VALIDATION_CHECK(op, input_shapes.size() == 2);
 
     const auto& data_shape = input_shapes[0];
@@ -251,14 +305,12 @@ TShape out_shape_infer(const TOp* op,
 
     const auto& data_rank = data_shape.rank();
 
-    OPENVINO_SUPPRESS_DEPRECATED_START
     NODE_VALIDATION_CHECK(op,
-                          is_rank_compatible_any_of(data_rank, {3, 4, 5}),
+                          ov::util::is_rank_compatible_any_of(data_rank, {3, 4, 5}),
                           "Expected a 3D, 4D or 5D tensor for the input. Got: ",
                           data_shape);
-    OPENVINO_SUPPRESS_DEPRECATED_END
 
-    TShape output_shape;
+    TRShape output_shape;
     if (data_rank.is_static()) {
         auto num_of_spatial_dims = data_shape.size() - spatial_dim_offset;
 
@@ -270,7 +322,7 @@ TShape out_shape_infer(const TOp* op,
         output_shape.reserve(data_shape.size());
         std::copy_n(data_shape.begin(), spatial_dim_offset, std::back_inserter(output_shape));
 
-        if (const auto spatial_dims = get_input_const_data_as_shape<TShape>(op, 1, constant_data)) {
+        if (const auto spatial_dims = get_input_const_data_as_shape<TRShape>(op, 1, ta)) {
             NODE_VALIDATION_CHECK(op,
                                   num_of_spatial_dims == spatial_dims->size(),
                                   "Number of spatial dimensions is not compatible with input data rank");

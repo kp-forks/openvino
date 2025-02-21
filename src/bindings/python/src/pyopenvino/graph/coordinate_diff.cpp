@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -11,13 +11,14 @@
 #include <sstream>
 #include <string>
 
+#include "pyopenvino/core/common.hpp"
 #include "pyopenvino/graph/coordinate_diff.hpp"
 
 namespace py = pybind11;
 
 void regclass_graph_CoordinateDiff(py::module m) {
     py::class_<ov::CoordinateDiff, std::shared_ptr<ov::CoordinateDiff>> coordinate_diff(m, "CoordinateDiff");
-    coordinate_diff.doc() = "openvino.runtime.CoordinateDiff wraps ov::CoordinateDiff";
+    coordinate_diff.doc() = "openvino.CoordinateDiff wraps ov::CoordinateDiff";
     coordinate_diff.def(py::init<const std::initializer_list<ptrdiff_t>&>());
     coordinate_diff.def(py::init<const std::vector<ptrdiff_t>&>());
     coordinate_diff.def(py::init<const ov::CoordinateDiff&>());
@@ -30,7 +31,7 @@ void regclass_graph_CoordinateDiff(py::module m) {
     });
 
     coordinate_diff.def("__repr__", [](const ov::CoordinateDiff& self) -> std::string {
-        std::string class_name = py::cast(self).get_type().attr("__name__").cast<std::string>();
+        std::string class_name = Common::get_class_name(self);
         std::string shape_str = py::cast(self).attr("__str__")().cast<std::string>();
         return "<" + class_name + ": (" + shape_str + ")>";
     });

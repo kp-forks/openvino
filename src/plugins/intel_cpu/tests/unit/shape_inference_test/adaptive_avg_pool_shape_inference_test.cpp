@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -21,12 +21,11 @@ protected:
 
 TEST_F(AdaptiveAvgPoolV8StaticShapeInferenceTest, default_ctor) {
     int32_t spatial_dims[] = {10, 20};
-    const std::map<size_t, HostTensorPtr> const_data{
-        {1, std::make_shared<HostTensor>(element::i32, ov::Shape{2}, spatial_dims)}};
+    const std::unordered_map<size_t, ov::Tensor> const_data{{1, {element::i32, ov::Shape{2}, spatial_dims}}};
 
     op = make_op();
-    input_shapes = ShapeVector{{1, 3, 1, 2}, {2}};
-    shape_inference(op.get(), input_shapes, output_shapes, const_data);
+    input_shapes = StaticShapeVector{{1, 3, 1, 2}, {2}};
+    output_shapes = shape_inference(op.get(), input_shapes, const_data);
 
     EXPECT_EQ(output_shapes.size(), 1);
     EXPECT_EQ(output_shapes.front(), StaticShape({1, 3, 10, 20}));
@@ -38,8 +37,8 @@ TEST_F(AdaptiveAvgPoolV8StaticShapeInferenceTest, out_spatial_dims_as_constant) 
 
     op = make_op(data, out_shape);
 
-    input_shapes = ShapeVector{{1, 3, 10}, {1}};
-    shape_inference(op.get(), input_shapes, output_shapes);
+    input_shapes = StaticShapeVector{{1, 3, 10}, {1}};
+    output_shapes = shape_inference(op.get(), input_shapes);
 
     EXPECT_EQ(output_shapes.size(), 1);
     EXPECT_EQ(output_shapes.front(), StaticShape({1, 3, 17}));
@@ -52,11 +51,10 @@ TEST_F(AdaptiveAvgPoolV8StaticShapeInferenceTest, out_spatial_dims_in_const_map)
     op = make_op(data, out_shape);
 
     int32_t spatial_dims[] = {9, 8, 7};
-    const std::map<size_t, HostTensorPtr> const_data{
-        {1, std::make_shared<HostTensor>(element::i32, ov::Shape{3}, spatial_dims)}};
+    const std::unordered_map<size_t, ov::Tensor> const_data{{1, {element::i32, ov::Shape{3}, spatial_dims}}};
 
-    input_shapes = ShapeVector{{1, 3, 10, 2, 4}, {3}};
-    shape_inference(op.get(), input_shapes, output_shapes, const_data);
+    input_shapes = StaticShapeVector{{1, 3, 10, 2, 4}, {3}};
+    output_shapes = shape_inference(op.get(), input_shapes, const_data);
 
     EXPECT_EQ(output_shapes.size(), 1);
     EXPECT_EQ(output_shapes.front(), StaticShape({1, 3, 9, 8, 7}));
@@ -69,11 +67,10 @@ TEST_F(AdaptiveAvgPoolV8StaticShapeInferenceTest, out_spatial_dims_in_const_map_
     op = make_op(data, out_shape);
 
     int32_t spatial_dims[] = {9, 8};
-    const std::map<size_t, HostTensorPtr> const_data{
-        {1, std::make_shared<HostTensor>(element::i32, ov::Shape{2}, spatial_dims)}};
+    const std::unordered_map<size_t, ov::Tensor> const_data{{1, {element::i32, ov::Shape{2}, spatial_dims}}};
 
-    input_shapes = ShapeVector{{1, 3, 10, 2, 4}, {3}};
-    OV_EXPECT_THROW(shape_inference(op.get(), input_shapes, output_shapes, const_data),
+    input_shapes = StaticShapeVector{{1, 3, 10, 2, 4}, {3}};
+    OV_EXPECT_THROW(shape_inference(op.get(), input_shapes, const_data),
                     ov::NodeValidationFailure,
                     HasSubstr("Number of spatial dimensions is not compatible with input data rank"));
 }

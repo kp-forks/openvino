@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2018-2023 Intel Corporation
+# Copyright (C) 2018-2025 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
 import numpy as np
 
-from openvino.runtime import Type
+from openvino import Type
 
 
 @pytest.mark.parametrize(("dtype_string", "dtype", "ovtype"), [
@@ -21,9 +21,20 @@ from openvino.runtime import Type
     ("uint32", np.uint32, Type.u32),
     ("uint64", np.uint64, Type.u64),
     ("bool", bool, Type.boolean),
+    ("bytes_", np.bytes_, Type.string),
+    ("str_", np.str_, Type.string),
+    ("bytes", bytes, Type.string),
+    ("str", str, Type.string),
+    ("|S", np.dtype("|S"), Type.string),
+    ("|U", np.dtype("|U"), Type.string),
 ])
 def test_dtype_ovtype_conversion(dtype_string, dtype, ovtype):
-    assert ovtype.to_dtype() == dtype
+    if hasattr(dtype, "kind"):
+        assert ovtype.to_dtype() == np.bytes_
+    elif issubclass(dtype, (str, np.str_)):
+        assert ovtype.to_dtype() == np.bytes_
+    else:
+        assert ovtype.to_dtype() == dtype
     assert Type(dtype_string) == ovtype
     assert Type(dtype) == ovtype
 
@@ -81,25 +92,17 @@ def test_basic_ovtypes(ovtype,
 
 def test_undefined_ovtype():
     ov_type = Type.undefined
-    assert ov_type.is_static() is True
-    assert ov_type.is_dynamic() is False
+    assert ov_type.is_static() is False
+    assert ov_type.is_dynamic() is True
     assert ov_type.is_real() is False
-    assert ov_type.real is False
     assert ov_type.is_integral() is True
-    assert ov_type.integral is True
     assert ov_type.is_signed() is False
-    assert ov_type.signed is False
     assert ov_type.is_quantized() is False
-    assert ov_type.quantized is False
-    assert ov_type.get_type_name() == "undefined"
-    assert ov_type.type_name == "undefined"
-    assert ov_type.get_size() == 0
+    assert ov_type.get_type_name() == "dynamic"
     assert ov_type.size == 0
-
-    # Note: might depend on the system
-    import sys
-    assert ov_type.bitwidth == sys.maxsize * 2 + 1
-    assert ov_type.get_bitwidth() == sys.maxsize * 2 + 1
+    assert ov_type.get_size() == 0
+    assert ov_type.bitwidth == 0
+    assert ov_type.get_bitwidth() == 0
 
 
 def test_dynamic_ov_type():

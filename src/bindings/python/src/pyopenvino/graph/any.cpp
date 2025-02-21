@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -7,6 +7,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include "pyopenvino/core/common.hpp"
 #include "pyopenvino/graph/any.hpp"
 #include "pyopenvino/utils/utils.hpp"
 
@@ -21,7 +22,7 @@ bool check_key(py::object key, py::object obj) {
 void regclass_graph_Any(py::module m) {
     py::class_<ov::Any, std::shared_ptr<ov::Any>> ov_any(m, "OVAny");
 
-    ov_any.doc() = "openvino.runtime.OVAny provides object wrapper for OpenVINO"
+    ov_any.doc() = "openvino.OVAny provides object wrapper for OpenVINO"
                    "ov::Any class. It allows to pass different types of objects"
                    "into C++ based core of the project.";
 
@@ -30,7 +31,7 @@ void regclass_graph_Any(py::module m) {
     }));
 
     ov_any.def("__repr__", [](const ov::Any& self) {
-        return "<OVAny class>";
+        return "<" + Common::get_class_name(self) + " class>";
     });
 
     ov_any.def("__hash__", [](ov::Any& self) {

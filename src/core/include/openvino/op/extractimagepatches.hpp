@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -58,7 +58,7 @@ public:
     const PadType& get_auto_pad() const {
         return m_padding;
     }
-    void set_auto_pad(PadType& padding) {
+    void set_auto_pad(const PadType& padding) {
         m_padding = padding;
     }
 
@@ -67,10 +67,6 @@ private:
     Strides m_patch_movement_strides;
     Shape m_patch_selection_rates;
     PadType m_padding{PadType::EXPLICIT};
-    template <class T>
-    friend void shape_infer(const ExtractImagePatches* op,
-                            const std::vector<T>& input_shapes,
-                            std::vector<T>& output_shapes);
 };
 }  // namespace v3
 }  // namespace op

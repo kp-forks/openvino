@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -53,25 +53,20 @@ ov::IAsyncInferRequest::IAsyncInferRequest(const std::shared_ptr<IInferRequest>&
 
 void ov::IAsyncInferRequest::wait() {
     // Just use the last '_futures' member to wait pipeline completion
-    auto future = [&] {
+    auto future = [this] {
         std::lock_guard<std::mutex> lock{m_mutex};
         return m_futures.empty() ? std::shared_future<void>{} : m_futures.back();
     }();
-
-    if (!future.valid()) {
-        return;
+    if (future.valid()) {
+        future.get();
     }
-
-    future.wait();
-    future.get();
 }
 
 bool ov::IAsyncInferRequest::wait_for(const std::chrono::milliseconds& timeout) {
     OPENVINO_ASSERT(timeout >= std::chrono::milliseconds{0}, "Timeout can't be less than 0 for InferRequest::wait().");
-    auto status = std::future_status::deferred;
 
     // Just use the last '_futures' member to wait pipeline completion
-    auto future = [&] {
+    auto future = [this] {
         std::lock_guard<std::mutex> lock{m_mutex};
         return m_futures.empty() ? std::shared_future<void>{} : m_futures.back();
     }();
@@ -80,7 +75,7 @@ bool ov::IAsyncInferRequest::wait_for(const std::chrono::milliseconds& timeout) 
         return false;
     }
 
-    status = future.wait_for(std::chrono::milliseconds{timeout});
+    const auto status = future.wait_for(std::chrono::milliseconds{timeout});
 
     if (std::future_status::ready == status) {
         future.get();
@@ -102,7 +97,7 @@ void ov::IAsyncInferRequest::set_callback(std::function<void(std::exception_ptr)
     m_callback = std::move(callback);
 }
 
-std::vector<std::shared_ptr<ov::IVariableState>> ov::IAsyncInferRequest::query_state() const {
+std::vector<ov::SoPtr<ov::IVariableState>> ov::IAsyncInferRequest::query_state() const {
     check_state();
     return m_sync_request->query_state();
 }
@@ -184,7 +179,7 @@ ov::threading::Task ov::IAsyncInferRequest::make_next_stage_task(
 }
 
 void ov::IAsyncInferRequest::start_async() {
-    infer_impl([&] {
+    infer_impl([this] {
         start_async_thread_unsafe();
     });
 }
@@ -201,28 +196,34 @@ void ov::IAsyncInferRequest::check_state() const {
     }
 }
 
+void ov::IAsyncInferRequest::check_cancelled_state() const {
+    std::lock_guard<std::mutex> lock{m_mutex};
+    if (m_state == InferState::CANCELLED)
+        ov::Cancelled::create("Infer Request was canceled");
+}
+
 std::vector<ov::ProfilingInfo> ov::IAsyncInferRequest::get_profiling_info() const {
     check_state();
     return m_sync_request->get_profiling_info();
 }
 
-ov::Tensor ov::IAsyncInferRequest::get_tensor(const ov::Output<const ov::Node>& port) const {
+ov::SoPtr<ov::ITensor> ov::IAsyncInferRequest::get_tensor(const ov::Output<const ov::Node>& port) const {
     check_state();
     return m_sync_request->get_tensor(port);
 }
 
-void ov::IAsyncInferRequest::set_tensor(const ov::Output<const ov::Node>& port, const ov::Tensor& tensor) {
+void ov::IAsyncInferRequest::set_tensor(const ov::Output<const ov::Node>& port, const ov::SoPtr<ov::ITensor>& tensor) {
     check_state();
     return m_sync_request->set_tensor(port, tensor);
 }
 
-std::vector<ov::Tensor> ov::IAsyncInferRequest::get_tensors(const ov::Output<const ov::Node>& port) const {
+std::vector<ov::SoPtr<ov::ITensor>> ov::IAsyncInferRequest::get_tensors(const ov::Output<const ov::Node>& port) const {
     check_state();
     return m_sync_request->get_tensors(port);
 }
 
 void ov::IAsyncInferRequest::set_tensors(const ov::Output<const ov::Node>& port,
-                                         const std::vector<ov::Tensor>& tensors) {
+                                         const std::vector<ov::SoPtr<ov::ITensor>>& tensors) {
     check_state();
     return m_sync_request->set_tensors(port, tensors);
 }
@@ -250,7 +251,7 @@ void ov::IAsyncInferRequest::stop_and_wait() {
 
 void ov::IAsyncInferRequest::infer() {
     DisableCallbackGuard disableCallbackGuard{this};
-    infer_impl([&] {
+    infer_impl([this] {
         infer_thread_unsafe();
     });
     wait();

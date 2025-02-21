@@ -1,25 +1,22 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #pragma once
 
-#include <threading/ie_istreams_executor.hpp>
-#include <ie_performance_hints.hpp>
-#include <ie/ie_common.h>
-#include <openvino/runtime/properties.hpp>
-#include <openvino/util/common_util.hpp>
-#include "utils/debug_caps_config.h"
-#include "openvino/runtime/properties.hpp"
-
 #include <bitset>
-#include <string>
 #include <map>
 #include <mutex>
 
+#include "internal_properties.hpp"
+#include "openvino/core/type/element_type.hpp"
+#include "openvino/runtime/properties.hpp"
+#include "openvino/runtime/threading/istreams_executor.hpp"
+#include "openvino/util/common_util.hpp"
+#include "utils/debug_caps_config.h"
+
 namespace ov {
 namespace intel_cpu {
-
 struct Config {
     Config();
 
@@ -40,35 +37,66 @@ struct Config {
         Disable,
     };
 
+    enum class ModelType { CNN, LLM, Unknown };
+
     bool collectPerfCounters = false;
     bool exclusiveAsyncRequests = false;
-    bool enableDynamicBatch = false;
     SnippetsMode snippetsMode = SnippetsMode::Enable;
     std::string dumpToDot = {};
     std::string device_id = {};
-    int batchLimit = 0;
     float fcSparseWeiDecompressionRate = 1.0f;
+    uint64_t fcDynamicQuantizationGroupSize = 32;
+    bool fcDynamicQuantizationGroupSizeSetExplicitly = false;
+    bool kvCachePrecisionSetExplicitly = false;
+    bool keyCachePrecisionSetExplicitly = false;
+    bool valueCachePrecisionSetExplicitly = false;
+    bool keyCacheGroupSizeSetExplicitly = false;
+    bool valueCacheGroupSizeSetExplicitly = false;
+#if defined(OV_CPU_WITH_ACL)
+    bool aclFastMath = false;
+#endif
 #if defined(OPENVINO_ARCH_X86_64)
+    ov::element::Type kvCachePrecision = ov::element::u8;
+    ov::element::Type keyCachePrecision = ov::element::u8;
+    ov::element::Type valueCachePrecision = ov::element::u8;
     size_t rtCacheCapacity = 5000ul;
 #else
+    ov::element::Type kvCachePrecision = ov::element::f16;
+    ov::element::Type keyCachePrecision = ov::element::f16;
+    ov::element::Type valueCachePrecision = ov::element::f16;
     // TODO: Executor cache may leads to incorrect behavior on oneDNN ACL primitives
     size_t rtCacheCapacity = 0ul;
 #endif
-    InferenceEngine::IStreamsExecutor::Config streamExecutorConfig;
-    InferenceEngine::PerfHintsConfig  perfHintsConfig;
+    size_t keyCacheGroupSize = 0ul;
+    size_t valueCacheGroupSize = 0ul;
+    ov::threading::IStreamsExecutor::Config streamExecutorConfig;
+    int streams = 1;
+    bool streamsChanged = false;
+    int threads = 0;
+    int threadsPerStream = 0;
+    ov::hint::PerformanceMode hintPerfMode = ov::hint::PerformanceMode::LATENCY;
+    std::vector<std::vector<int>> streamsRankTable;
+    bool changedHintPerfMode = false;
+    ov::log::Level logLevel = ov::log::Level::NO;
+    uint32_t hintNumRequests = 0;
     bool enableCpuPinning = true;
     bool changedCpuPinning = false;
+    bool enableCpuReservation = false;
     ov::hint::SchedulingCoreType schedulingCoreType = ov::hint::SchedulingCoreType::ANY_CORE;
+    std::set<ov::hint::ModelDistributionPolicy> modelDistributionPolicy = {};
+    int streamsRankLevel = 1;
+    int numSubStreams = 0;
+    bool enableNodeSplit = false;
     bool enableHyperThreading = true;
     bool changedHyperThreading = false;
 #if defined(OPENVINO_ARCH_X86) || defined(OPENVINO_ARCH_X86_64)
     LPTransformsMode lpTransformsMode = LPTransformsMode::On;
-    bool enforceBF16 = true;
 #else
     // Currently INT8 mode is not optimized on ARM / RISCV or other non-x86 platforms, fallback to FP32 mode.
     LPTransformsMode lpTransformsMode = LPTransformsMode::Off;
-    bool enforceBF16 = false;
 #endif
+    // default inference precision
+    ov::element::Type inferencePrecision = ov::element::f32;
     bool inferencePrecisionSetExplicitly = false;
     ov::hint::ExecutionMode executionMode = ov::hint::ExecutionMode::PERFORMANCE;
 
@@ -79,12 +107,18 @@ struct Config {
     // is reserved.
     bool DAZOn = false;
 
-    void readProperties(const std::map<std::string, std::string> &config);
+    void readProperties(const ov::AnyMap& config, const ModelType modelType = ModelType::Unknown);
+
     void updateProperties();
+
+    void applyRtInfo(const std::shared_ptr<const ov::Model>& model);
 
     std::map<std::string, std::string> _config;
 
-    bool isNewApi = true;
+    int modelPreferThreads = -1;
+    ModelType modelType = ModelType::Unknown;
+    std::function<std::string(const std::string&)> cacheEncrypt;
+    std::function<std::string(const std::string&)> cacheDecrypt;
 
 #ifdef CPU_DEBUG_CAPS
     DebugCapsConfig debugCaps;
@@ -92,5 +126,5 @@ struct Config {
 #endif
 };
 
-}   // namespace intel_cpu
-}   // namespace ov
+}  // namespace intel_cpu
+}  // namespace ov

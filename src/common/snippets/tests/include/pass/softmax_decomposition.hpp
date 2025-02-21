@@ -1,41 +1,31 @@
-// Copyright (C) 2022 Intel Corporation
+// Copyright (C) 2023 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #pragma once
 
 #include "lowering_utils.hpp"
-#include "snippets_helpers.hpp"
+#include "subgraph_softmax.hpp"
+
+/* The main purpose is to test that SoftmaxDecomposition properly decomposes Softmax operation
+ */
 
 namespace ov {
 namespace test {
 namespace snippets {
 
 typedef std::tuple<
-        Shape, // Input shape 0
-        int  // Axis
-> SoftmaxParams;
+        PartialShape,  // Input shape
+        int,          // Softmax axis
+        SoftmaxVersion
+> SoftmaxDecompositionTestParams;
 
-typedef std::tuple<
-        Shape, // Input shape 0
-        Shape, // Input shape 1
-        int  // Axis
-> AddSoftmaxParams;
-
-class SoftmaxTests : public LoweringTests, public testing::WithParamInterface<SoftmaxParams> {
+class SoftmaxDecompositionTest : public LoweringTests, public testing::WithParamInterface<SoftmaxDecompositionTestParams> {
 public:
-    static std::string getTestCaseName(testing::TestParamInfo<SoftmaxParams> obj);
+    static std::string getTestCaseName(testing::TestParamInfo<SoftmaxDecompositionTestParams> obj);
 protected:
     void SetUp() override;
-    std::shared_ptr<SnippetsFunctionBase> snippets_function;
-};
-
-class AddSoftmaxTests : public LoweringTests, public testing::WithParamInterface<AddSoftmaxParams> {
-public:
-    static std::string getTestCaseName(testing::TestParamInfo<AddSoftmaxParams> obj);
-protected:
-    void SetUp() override;
-    std::shared_ptr<SnippetsFunctionBase> snippets_function;
+    std::shared_ptr<SnippetsFunctionBase> snippets_model;
 };
 
 }  // namespace snippets

@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2023 Intel Corporation
+# Copyright (C) 2018-2025 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 #
 
@@ -28,7 +28,6 @@ if(ENABLE_TEMPLATE)
     list(APPEND DEPENDENCIES openvino_template_plugin)
 endif()
 
-# remove once CVS-69781 is fixed
 if(ENABLE_OV_IR_FRONTEND)
     list(APPEND DEPENDENCIES openvino_ir_frontend)
 endif()
@@ -40,33 +39,33 @@ else()
     set(EXCLUDED_SOURCE_PATHS ${CMAKE_CURRENT_SOURCE_DIR}/src/onnx)
 endif()
 
-if (TARGET inference_engine_snippets)
-    list(APPEND LINK_LIBRARIES_PRIVATE snippetsNgraphFunctions)
+if (TARGET openvino::snippets)
+    list(APPEND LINK_LIBRARIES_PRIVATE ov_snippets_models)
+    if (ENABLE_SNIPPETS_LIBXSMM_TPP)
+        add_definitions(-DSNIPPETS_LIBXSMM_TPP)
+    endif()
 else()
     list(APPEND EXCLUDED_SOURCE_PATHS ${CMAKE_CURRENT_SOURCE_DIR}/src/snippets)
 endif()
 
-addIeTarget(
+ov_add_target(
         NAME ${TARGET_NAME}
         TYPE STATIC
         ROOT ${PUBLIC_HEADERS_DIR}
         ADDITIONAL_SOURCE_DIRS
             ${CMAKE_CURRENT_SOURCE_DIR}/src
         ADD_CPPLINT
-        DEVELOPER_PACKAGE
-            tests
         EXCLUDED_SOURCE_PATHS ${EXCLUDED_SOURCE_PATHS}
         DEFINES ${DEFINES}
         INCLUDES
             PUBLIC
-                ${PUBLIC_HEADERS_DIR}
+                "$<BUILD_INTERFACE:${PUBLIC_HEADERS_DIR}>"
         LINK_LIBRARIES
             PUBLIC
                 openvino::pugixml
-                funcTestUtils
-                ngraph_test_util
-                ngraphFunctions
-                lptNgraphFunctions
+                common_test_utils
+                func_test_utils
+                ov_lpt_models
                 sharedTestClasses
             PRIVATE
                 ${LINK_LIBRARIES_PRIVATE}
@@ -74,16 +73,11 @@ addIeTarget(
             ${DEPENDENCIES}
 )
 
-if(ENABLE_GAPI_PREPROCESSING)
-    target_compile_definitions(${TARGET_NAME} PUBLIC ENABLE_GAPI_PREPROCESSING)
-endif()
-
-ie_faster_build(${TARGET_NAME}
+ov_build_target_faster(${TARGET_NAME}
     PCH PRIVATE "src/precomp.hpp"
 )
 
-if (ENABLE_INTEL_CPU)
-    set_source_files_properties(
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/behavior/ov_executable_network/get_metric.cpp"
-        PROPERTIES COMPILE_DEFINITIONS ENABLE_INTEL_CPU=1)
-endif()
+# install & export
+
+ov_developer_package_export_targets(TARGET ${TARGET_NAME}
+                                    INSTALL_INCLUDE_DIRECTORIES "${PUBLIC_HEADERS_DIR}/")

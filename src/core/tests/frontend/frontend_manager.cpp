@@ -1,35 +1,35 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+
 #include <memory>
-#include <openvino/frontend/exception.hpp>
-#include <openvino/frontend/manager.hpp>
 
 #include "common_test_utils/file_utils.hpp"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
-#include "ngraph/file_util.hpp"
-#include "ngraph/util.hpp"
+#include "common_test_utils/test_assertions.hpp"
+#include "openvino/frontend/exception.hpp"
+#include "openvino/frontend/manager.hpp"
 #include "openvino/util/file_util.hpp"
 
 using namespace ov::frontend;
 
 static std::string mock_fe_path() {
     static auto lib_name = std::string(FRONTEND_LIB_PREFIX) + "mock1" + std::string(FRONTEND_LIB_SUFFIX);
-    return ov::util::path_join({CommonTestUtils::getExecutableDirectory(), lib_name});
+    return ov::util::path_join({ov::test::utils::getExecutableDirectory(), lib_name}).string();
 }
 
 TEST(FrontEndManagerTest, testAvailableFrontEnds) {
     FrontEndManager fem;
     class MockFrontEnd : public FrontEnd {};
-    ASSERT_NO_THROW(fem.register_front_end("mock", []() {
+    OV_ASSERT_NO_THROW(fem.register_front_end("mock", []() {
         return std::make_shared<MockFrontEnd>();
     }));
     auto frontends = fem.get_available_front_ends();
     ASSERT_NE(std::find(frontends.begin(), frontends.end(), "mock"), frontends.end());
     FrontEnd::Ptr fe;
-    ASSERT_NO_THROW(fe = fem.load_by_framework("mock"));
+    OV_ASSERT_NO_THROW(fe = fem.load_by_framework("mock"));
 
     FrontEndManager fem2 = std::move(fem);
     frontends = fem2.get_available_front_ends();
@@ -52,7 +52,7 @@ TEST(FrontEndManagerTest, testMockPluginFrontEnd) {
     EXPECT_NE(std::find(frontends.begin(), frontends.end(), "mock1"), frontends.end());
 
     FrontEnd::Ptr fe;
-    ASSERT_NO_THROW(fe = fem.load_by_framework("mock1"));
+    OV_ASSERT_NO_THROW(fe = fem.load_by_framework("mock1"));
     EXPECT_EQ(fe->get_name(), "mock1");
 }
 
@@ -63,7 +63,7 @@ TEST(FrontEndManagerTest, testFEMDestroy_FrontEndHolder) {
         fem.register_front_end("mock1", mock_fe_path());
         auto frontends = fem.get_available_front_ends();
         EXPECT_NE(std::find(frontends.begin(), frontends.end(), "mock1"), frontends.end());
-        ASSERT_NO_THROW(fe = fem.load_by_framework("mock1"));
+        OV_ASSERT_NO_THROW(fe = fem.load_by_framework("mock1"));
     }
     EXPECT_EQ(fe->get_name(), "mock1");
 }
@@ -118,7 +118,7 @@ TEST(FrontEndManagerTest, testDefaultFrontEnd) {
     FrontEndManager fem;
     fem.register_front_end("mock1", mock_fe_path());
     FrontEnd::Ptr fe;
-    ASSERT_NO_THROW(fe = fem.load_by_model(""));
+    OV_ASSERT_NO_THROW(fe = fem.load_by_model());
     ASSERT_EQ(nullptr, fe);
 
     class MockFrontEnd : public FrontEnd {};
@@ -156,9 +156,9 @@ TEST(FrontEndManagerTest, testDefaultInputModel) {
     ASSERT_ANY_THROW(im->cut_and_add_new_output(nullptr, ""));
     ASSERT_ANY_THROW(im->add_output(nullptr));
     ASSERT_ANY_THROW(im->remove_output(nullptr));
-    ASSERT_ANY_THROW(im->set_partial_shape(nullptr, ngraph::Shape{}));
+    ASSERT_ANY_THROW(im->set_partial_shape(nullptr, ov::Shape{}));
     ASSERT_ANY_THROW(im->get_partial_shape(nullptr));
-    ASSERT_ANY_THROW(im->set_element_type(nullptr, ngraph::element::Type{}));
+    ASSERT_ANY_THROW(im->set_element_type(nullptr, ov::element::Type{}));
     ASSERT_ANY_THROW(im->set_tensor_value(nullptr, nullptr));
     ASSERT_ANY_THROW(im->set_tensor_partial_value(nullptr, nullptr, nullptr));
 }
@@ -479,3 +479,29 @@ TEST(FrontEndManagerTest, Exception_Safety_Input_Model_set_tensor_value) {
 TEST(FrontEndManagerTest, Exception_Safety_Input_Model_set_tensor_partial_value) {
     CHECK_EXCEPTION_INPUT_MODEL(input_model->set_tensor_partial_value({}, {}, {}))
 }
+
+#ifdef OPENVINO_CPP_VER_AT_LEAST_17
+
+TEST(FrontEndManagerTest, testFEMDestroy_InputModelHolderUsingPath) {
+    InputModel::Ptr input_model;
+    {
+        std::shared_ptr<ov::Model> model;
+        FrontEndManager fem;
+        fem.register_front_end("mock1", mock_fe_path());
+        auto fe = fem.load_by_framework("mock1");
+        input_model = fe->load(std::filesystem::path("test"));
+        model = fe->convert(input_model);
+        EXPECT_EQ(model->get_friendly_name(), "mock1_model");
+    }
+    ASSERT_TRUE(input_model);
+}
+
+TEST(FrontEndManagerTest, Exception_Safety_FrontEnd_Supported_By_Path) {
+    EXPECT_ANY_THROW({
+        FrontEndManager fem;
+        fem.register_front_end("mock1", mock_fe_path());
+        auto fe = fem.load_by_framework("mock1");
+        fe->supported(std::filesystem::path("throw_now"));
+    });
+}
+#endif

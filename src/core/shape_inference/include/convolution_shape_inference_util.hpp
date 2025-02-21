@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -20,13 +20,12 @@ constexpr size_t spatial_dim_offset = 2;
 /**
  * @brief Get num of spatial form convolution operator.
  *
- * Tries get value from operator member if is not deduced (has -1 value) then tries evaluate it from input shapes.
+ * Tries to get value from operator member, if not deduced (has -1 value) then tries evaluate it from input shapes.
  *
- * @tparam TConv       Convolution type (this function must be a friend of TConv to access private member).
- * @tparam TShape      Shape type.
- * @param op           Pointer to convolution operator.
- * @param data_shape   Input data shape.
- * @param flter_shape  Input filter shape.
+ * @tparam TShape   Shape type.
+ * @param data_shape    Input data shape.
+ * @param filter_shape  Input filter shape.
+ * @param filter_non_spatial_dims_count Number of non spatial dimensions in filter input
  * @return Value of spatial dimension number or infinite bound (-1) if cannot evaluate.
  */
 template <class TShape>
@@ -189,8 +188,8 @@ void apply_auto_pad(const TOp* op,
 
     for (size_t i = 0; i < num_spatial; ++i, ++pad_b, ++pad_e, ++data_dim, ++kernel_dim) {
         using namespace ov::util;
-        if (kernel_dim->is_static()) {
-            std::tie(*pad_b, *pad_e) = dim::padding(*data_dim, kernel_dim->get_length(), dilations[i], strides[i]);
+        if (dim::is_static(*kernel_dim)) {
+            std::tie(*pad_b, *pad_e) = dim::padding(*data_dim, dim::get_length(*kernel_dim), dilations[i], strides[i]);
         } else {
             *pad_b = 0;
             *pad_e = 0;
@@ -241,6 +240,7 @@ void apply_padding(const TOp* op,
  */
 template <class TOp,
           class TShape,
+          class TRShape = result_shape_t<TShape>,
           typename std::enable_if<std::is_base_of<util::ConvolutionFwdPropBase, TOp>::value ||
                                   std::is_base_of<util::DeformableConvolutionBase, TOp>::value>::type* = nullptr>
 void append_spatial_shape(const TOp* op,
@@ -248,7 +248,7 @@ void append_spatial_shape(const TOp* op,
                           const TShape& filters_shape,
                           CoordinateDiff& pads_begin,
                           CoordinateDiff& pads_end,
-                          TShape& out_shape) {
+                          TRShape& out_shape) {
     using namespace ov::util;
     using TDim = typename TShape::value_type;
 
@@ -266,8 +266,8 @@ void append_spatial_shape(const TOp* op,
         const auto& dilations = op->get_dilations();
 
         for (size_t i = 0; i < spatial_num; ++i, ++data_dim, ++filters_dim) {
-            auto dim = *data_dim + (pads_begin[i] + pads_end[i]);
-            const auto filter_dilated = dim::dilated(*filters_dim, dilations[i]);
+            TDim dim = *data_dim + (pads_begin[i] + pads_end[i]);
+            const TDim filter_dilated = dim::dilated(*filters_dim, dilations[i]);
 
             if (dim.is_static() && filter_dilated.is_static()) {
                 // Use check from pooling op as it is same.
@@ -284,12 +284,10 @@ void append_spatial_shape(const TOp* op,
 namespace validate {
 template <class TShape>
 void data_shape(const ov::op::util::ConvolutionBase* op, const TShape& data_shape) {
-    OPENVINO_SUPPRESS_DEPRECATED_START
     NODE_VALIDATION_CHECK(op,
-                          is_rank_compatible_any_of(data_shape.rank(), {3, 4, 5}),
+                          ov::util::is_rank_compatible_any_of(data_shape.rank(), {3, 4, 5}),
                           "Expected a 3D, 4D or 5D tensor for the input. Got: ",
                           data_shape);
-    OPENVINO_SUPPRESS_DEPRECATED_END
 }
 
 template <class TShape>

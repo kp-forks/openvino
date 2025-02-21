@@ -4,14 +4,14 @@
 
 #pragma once
 
-#include <openvino/pass/graph_rewrite.hpp>
-#include <transformations_visibility.hpp>
+#include "openvino/pass/graph_rewrite.hpp"
+#include "transformations_visibility.hpp"
 
 namespace ov {
 namespace pass {
 
 /**
- * @ingroup ie_transformation_common_api
+ * @ingroup ov_transformation_common_api
  * @brief ConvolutionToGroupConvolutionFusion transformation replaces following graph:
  *                    Split (or VariadicSplit)
  *                  /       \
@@ -24,7 +24,7 @@ namespace pass {
  */
 class TRANSFORMATIONS_API ConvolutionToGroupConvolutionFusion : public MatcherPass {
 public:
-    OPENVINO_RTTI("ConvolutionToGroupConvolutionFusion", "0");
+    OPENVINO_MATCHER_PASS_RTTI("ConvolutionToGroupConvolutionFusion");
     ConvolutionToGroupConvolutionFusion();
 };
 

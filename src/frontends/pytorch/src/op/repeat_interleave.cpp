@@ -1,10 +1,11 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #include "openvino/frontend/pytorch/node_context.hpp"
 #include "openvino/op/concat.hpp"
 #include "openvino/op/constant.hpp"
+#include "openvino/op/convert.hpp"
 #include "openvino/op/gather.hpp"
 #include "openvino/op/range.hpp"
 #include "openvino/op/reshape.hpp"
@@ -47,7 +48,7 @@ OutputVector translate_repeat_interleave(const NodeContext& context) {
     std::shared_ptr<ov::Node> result;
 
     auto repeats_ext_node = context.get_input_from_visible_context(1).get_node_shared_ptr();
-    auto repeats_fw_node = std::dynamic_pointer_cast<v0::Constant>(repeats_ext_node);
+    auto repeats_fw_node = ov::as_type_ptr<v0::Constant>(repeats_ext_node);
     if (repeats_fw_node && repeats_fw_node->cast_vector<int32_t>().size() > 1) {
         // repeats is Constant with more then 1 element
         auto repeats = repeats_fw_node->cast_vector<int32_t>();
@@ -67,9 +68,9 @@ OutputVector translate_repeat_interleave(const NodeContext& context) {
         }
     } else {
         // repeats is not Constant or single element constant
-        // Curently we support only case when repeats contains only one element. Otherwise next Reshape will fail.
-        auto repeats_input =
-            context.mark_node(std::make_shared<v1::Reshape>(context.get_input(1), const_1_list, false));
+        // Currently we support only case when repeats contains only one element. Otherwise next Reshape will fail.
+        auto repeats_input = context.mark_node(std::make_shared<v0::Convert>(context.get_input(1), element::i32));
+        repeats_input = context.mark_node(std::make_shared<v1::Reshape>(repeats_input, const_1_list, false));
         auto repeats = context.mark_node(std::make_shared<v0::Concat>(OutputVector{repeats_input, const_1_list}, 0));
         auto shape_perm = context.mark_node(v0::Constant::create(element::i32, Shape{2}, {1, 0}));
         if (context.input_is_none(2)) {

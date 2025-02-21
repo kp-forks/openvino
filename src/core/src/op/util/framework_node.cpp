@@ -1,11 +1,10 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #include "openvino/op/util/framework_node.hpp"
 
 #include "itt.hpp"
-#include "ngraph/graph_util.hpp"
 
 ov::op::util::FrameworkNode::FrameworkNode(const OutputVector& inputs, size_t output_size, size_t num_subgraphs)
     : MultiSubGraphOp(num_subgraphs),
@@ -95,7 +94,7 @@ void ov::op::util::FrameworkNode::validate_and_infer_types() {
                 pshape = shape_map.at(output_index);
             }
             if (PartialShape::merge_into(pshape, node_result.get_partial_shape())) {
-                shape_map[output_index] = pshape;
+                shape_map[output_index] = std::move(pshape);
             } else {
                 shape_map[output_index] = PartialShape::dynamic();
             }
@@ -133,7 +132,7 @@ void ov::op::util::FrameworkNode::validate_and_infer_types() {
             out << "Input descriptor for " << get_friendly_name() << " node has been changed:" << std::endl;
             out << "Before: " << std::get<0>(m_inputs_desc[i]) << ", " << std::get<1>(m_inputs_desc[i]) << std::endl;
             out << "After:  " << input_pshape << ", " << input_type << std::endl;
-            out << "Please specify InferenceEngine Extensions to support this case.";
+            out << "Please specify OpenVINO Extensions to support this case.";
             return out.str();
         };
 

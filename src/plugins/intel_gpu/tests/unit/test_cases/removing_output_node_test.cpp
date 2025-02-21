@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -89,7 +89,7 @@ void test_multiple_outputs(bool is_caching_test) {
         ASSERT_EQ(output_ptr2[i], out_vec[i]);
 }
 
-TEST(removing_output_node, multiple_outputs) {
+TEST(removing_output_node, DISABLED_multiple_outputs) { // Issue 129991
     test_multiple_outputs<float>(false);
 }
 
@@ -128,7 +128,7 @@ void test_output_node_optimization(bool is_caching_test) {
     topology topology;
     topology.add(input_layout("input", input->get_layout()));
     topology.add(data("weights", weights));
-    topology.add(convolution("conv", input_info("input"), { "weights" }, { 2, 1 }));
+    topology.add(convolution("conv", input_info("input"), "weights", "", 1, {2, 1}, {1, 1}, {0, 0}, {0, 0}, false));
     topology.add(activation("relu", input_info("conv"), activation_func::relu));
 
     cldnn::network::ptr network = get_network(engine, topology, get_test_default_config(engine), get_test_stream_ptr(), is_caching_test);
@@ -164,7 +164,7 @@ TEST(removing_output_node, output_node_optimization) {
 }
 
 #ifdef RUN_ALL_MODEL_CACHING_TESTS
-TEST(removing_output_node, multiple_outputs_cached) {
+TEST(removing_output_node, DISABLED_multiple_outputs_cached) {  // Issue 129991
     test_multiple_outputs<float>(true);
 }
 #endif

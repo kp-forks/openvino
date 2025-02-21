@@ -23,8 +23,8 @@ openvino/src/plugins/intel_gpu/tests	- root of Intel GPU unit test
   - Fusion is an algorithm that fuses several operations into one optimized operation. For example, two nodes of `conv -> relu` may be fused into a single node of `conv`.
   - Fusion unit tests checks whether the fusion is done as expected.
   - fusion_test_common.cpp
-     - The base class for a fusing test, that is, [BaseFusingTest](https://github.com/openvinotoolkit/openvino/blob/master/src/plugins/intel_gpu/tests/fusions/fusion_test_common.hpp#L19), is implemented here. It tests whether the fusing is successful or not by comparing the execution results of the two networks, one is the fused network, the other is non-fused network for the same topology.
-       - [BaseFusingTest](https://github.com/openvinotoolkit/openvino/blob/master/src/plugins/intel_gpu/tests/fusions/fusion_test_common.hpp#L19) has an important method called `compare()`.
+     - The base class for a fusing test, that is, [BaseFusingTest](https://github.com/openvinotoolkit/openvino/blob/master/src/plugins/intel_gpu/tests/unit/fusions/fusion_test_common.hpp#L20), is implemented here. It tests whether the fusing is successful or not by comparing the execution results of the two networks, one is the fused network, the other is non-fused network for the same topology.
+       - [BaseFusingTest](https://github.com/openvinotoolkit/openvino/blob/master/src/plugins/intel_gpu/tests/unit/fusions/fusion_test_common.hpp#L20) has an important method called `compare()`.
        - `compare()` method has the following three tasks:
             - Execute two networks (fused network and not fused network)
             - Compare the actual number of executed primitives with the expected number of executed primitives in test params
@@ -57,38 +57,35 @@ openvino/src/plugins/intel_gpu/tests	- root of Intel GPU unit test
 
 ## Build unit test
 
-1. Turn on `ENABLE_TESTS` and `ENABLE_CLDNN_TESTS` in cmake option:
+1. Turn on `ENABLE_TESTS` in cmake option:
 
    ```bash
-   cmake -DCMAKE_BUILD_TYPE=Release \
-       -DENABLE_TESTS=ON \
-       -DENABLE_CLDNN_TESTS=ON \
-       -DENABLE_CLDNN=ON ..
+   cmake -DCMAKE_BUILD_TYPE=Release -DENABLE_TESTS=ON ..
    ```
 
 2. Build
 
    ```bash
-   make clDNN_unit_tests
+   make ov_gpu_unit_tests
    ```
 
-3. You can find `clDNN_unit_tests64` in *bin* directory after build
+3. You can find `ov_gpu_unit_tests` in *bin* directory after build
 
 ## Run unit test
 
-You can run _`clDNN_unit_tests64`_ in *bin* directory which is the output of OpenVINO build
+You can run _`ov_gpu_unit_tests`_ in *bin* directory which is the output of OpenVINO build
 
 If you want to run a specific unit test, you can use `gtest_filter` option as follows:
 
 ```
-./clDNN_unit_tests64 --gtest_filter='*filter_name*'
+./ov_gpu_unit_tests --gtest_filter='*filter_name*'
 ```
 
 Then, you can get the result similar to:
 
 ```bash
 openvino/bin/intel64/Release$ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PWD
-openvino/bin/intel64/Release$ ./clDNN_unit_tests64 --gtest_filter='*fusings_gpu/conv_fp32_reorder_fsv16_to_bfyx.basic/0*'
+openvino/bin/intel64/Release$ ./ov_gpu_unit_tests --gtest_filter='*fusings_gpu/conv_fp32_reorder_fsv16_to_bfyx.basic/0*'
 Running main() from /home/openvino/thirdparty/gtest/gtest/googletest/src/gtest_main.cc
 Note: Google Test filter = *fusings_gpu/conv_fp32_reorder_fsv16_to_bfyx.basic/0*
 [==========] Running 1 test from 1 test suite.
@@ -141,9 +138,9 @@ GPU unit tests are using two types of test macros (**TEST** and **TEST_P**)  in 
 - **TEST** checks the test result by comparing the execution results with expected values after running network created from the target topology to check.
   - It is important to generate test input and expected output result in **TEST**
   - You can create input data and expected output data using these three approaches:
-    - Generate simple input data and calculate the expected output data from input data manually, like [basic_deformable_convolution_def_group1_2](https://github.com/openvinotoolkit/openvino/blob/master/src/plugins/intel_gpu/tests/test_cases/convolution_gpu_test.cpp#L254)
-    - Generate random input and get the expected output, using reference function, which is made in the test codes like [mvn_test_across_channels_outside_sqrt_bfyx](https://github.com/openvinotoolkit/openvino/blob/master/src/plugins/intel_gpu/tests/test_cases/mvn_gpu_test.cpp#L108)
-    - Generate random input and get the expected output from another reference kernel which exists in clDNN kernels like [mvn_random_test_bsv32](https://github.com/openvinotoolkit/openvino/blob/master/src/plugins/intel_gpu/tests/test_cases/mvn_gpu_test.cpp#L793)
+    - Generate simple input data and calculate the expected output data from input data manually, like [basic_deformable_convolution_def_group1_2](https://github.com/openvinotoolkit/openvino/blob/master/src/plugins/intel_gpu/tests/unit/test_cases/convolution_gpu_test.cpp#L224)
+    - Generate random input and get the expected output, using reference function, which is made in the test codes like [mvn_test_across_channels_outside_sqrt_bfyx](https://github.com/openvinotoolkit/openvino/blob/master/src/plugins/intel_gpu/tests/unit/test_cases/mvn_gpu_test.cpp#L138)
+    - Generate random input and get the expected output from another reference kernel which exists in clDNN kernels like [mvn_random_test_bsv32](https://github.com/openvinotoolkit/openvino/blob/master/src/plugins/intel_gpu/tests/unit/test_cases/mvn_gpu_test.cpp#L762)
 
 - When you allocate input data, keep in mind that the layout order in `engine.allocation_memory` is not `bfyx` but `bfxy`. For example, if input is `{1,1,4,5}`, the layout should be as below:
 
@@ -154,7 +151,7 @@ GPU unit tests are using two types of test macros (**TEST** and **TEST_P**)  in 
 ## fusions
 
 - It is implemented based on **TEST_P** because there are many cases where multiple layouts are tested in the same topology.
-- If the fusing test class already exists, you can use it. Otherwise, you should make a new fusing test class, which is inherited [BaseFusingTest](https://github.com/openvinotoolkit/openvino/blob/master/src/plugins/intel_gpu/tests/fusions/fusion_test_common.hpp#L19).
+- If the fusing test class already exists, you can use it. Otherwise, you should make a new fusing test class, which is inherited [BaseFusingTest](https://github.com/openvinotoolkit/openvino/blob/master/src/plugins/intel_gpu/tests/unit/fusions/fusion_test_common.hpp#L20).
   - The new fusing test class should create the `execute()` method, which creates fused / non-fused networks and calls `compare` method after setting input.
 - Create a test case, using **TEST_P**:
   - You can make the desired networks using create_topologies.

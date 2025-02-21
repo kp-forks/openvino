@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -18,11 +18,11 @@ typedef std::unordered_map<size_t, Output<Node>> TensorMap;
 
 class NodeContext : public frontend::NodeContext {
 public:
-    NodeContext(std::shared_ptr<TorchDecoder> decoder,
+    NodeContext(const std::shared_ptr<TorchDecoder>& decoder,
                 const TensorMap& ext_tensor_map,
-                std::shared_ptr<TensorMap> tensor_map,
-                std::shared_ptr<ParameterVector> external_parameters,
-                std::shared_ptr<std::set<size_t>> mutated_tensors,
+                const std::shared_ptr<TensorMap>& tensor_map,
+                const std::shared_ptr<ParameterVector>& external_parameters,
+                const std::shared_ptr<std::set<size_t>>& mutated_tensors,
                 TranslateSession* translate_session)
         : frontend::NodeContext(decoder->get_op_type()),
           m_decoder(decoder),
@@ -32,9 +32,13 @@ public:
           m_mutated_tensors(mutated_tensors),
           m_translate_session(translate_session),
           m_decoder_inputs(decoder->inputs()),
-          m_decoder_outputs(decoder->outputs()) {
+          m_decoder_outputs(decoder->outputs()),
+          m_inputs_is_none(m_decoder_inputs.size(), false) {
         FRONT_END_GENERAL_CHECK(m_tensor_map != nullptr && m_external_parameters != nullptr &&
                                 m_mutated_tensors != nullptr && m_translate_session != nullptr);
+        for (size_t i = 0; i < m_decoder_inputs.size(); i++) {
+            m_inputs_is_none[i] = decoder->input_is_none(i);
+        }
     }
 
     // Do not search for input in tensor map; try to access it as a constant of specified type T and return its value
@@ -47,31 +51,22 @@ public:
 
     // Search for input in tensor map and return an output port for already converted op
     // TODO: int due to base class uses it, but naturally it should be size_t for PT
-    Output<Node> get_input(int index) const override {
-        FRONT_END_GENERAL_CHECK(!m_decoder->input_is_none(index), "Input is none with index: ", index);
-        auto input = m_decoder_inputs.at(index);
-        FRONT_END_GENERAL_CHECK(m_tensor_map->count(input), "No tensor corresponding input: ", input, " exist.");
-        return m_tensor_map->at(input);
-    }
+    Output<Node> get_input(int index) const override;
+
+    Output<Node> get_input(const std::string& name) const override;
 
     Any get_values_from_const_input(int index) const override;
 
-    // TODO: upstream to base class
-    OutputVector inputs() const {
-        OutputVector res;
-        for (auto input : m_decoder_inputs) {
-            FRONT_END_GENERAL_CHECK(m_tensor_map->count(input), "No tensor corresponding index: ", input, " exist.");
-            res.push_back(m_tensor_map->at(input));
-        }
-        return res;
-    }
+    OutputVector inputs() const;
 
     Any get_input_type(size_t index) const {
         return m_decoder->get_input_type(index);
     }
 
-    bool input_is_none(size_t index) const {
-        return m_decoder->input_is_none(index);
+    bool input_is_none(size_t index) const;
+
+    Any get_output_type(size_t index) const {
+        return m_decoder->get_output_type(index);
     }
 
     size_t get_output_size() const {
@@ -105,9 +100,8 @@ public:
         return ov_output;
     }
 
-    Any get_attribute_as_any(const std::string&) const override {
-        throw std::runtime_error(
-            "There is no any named attributes in PyTorch node, query by attribute name is not implemented");
+    Any get_attribute_as_any(const std::string& name) const override {
+        return m_decoder->get_attribute(name);
     }
 
     void mutate_input(size_t index, Output<Node> ov_output) const;
@@ -120,7 +114,7 @@ public:
         return m_translate_session;
     }
 
-    void add_tensor_to_context(size_t index, Output<Node> ov_output) const;
+    void add_tensor_to_context(size_t index, const Output<Node>& ov_output) const;
 
     Output<Node> get_tensor_from_model(size_t index) const {
         if (m_tensor_map->find(index) != m_tensor_map->end()) {
@@ -143,6 +137,7 @@ private:
     TranslateSession* m_translate_session = nullptr;
     const std::vector<size_t> m_decoder_inputs;
     const std::vector<size_t> m_decoder_outputs;
+    std::vector<bool> m_inputs_is_none;
 };
 
 using CreatorFunction = std::function<ov::OutputVector(const ov::frontend::pytorch::NodeContext&)>;
