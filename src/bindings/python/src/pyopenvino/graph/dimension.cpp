@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -20,7 +20,7 @@ void regclass_graph_Dimension(py::module m) {
     using value_type = ov::Dimension::value_type;
 
     py::class_<ov::Dimension, std::shared_ptr<ov::Dimension>> dim(m, "Dimension");
-    dim.doc() = "openvino.runtime.Dimension wraps ov::Dimension";
+    dim.doc() = "openvino.Dimension wraps ov::Dimension";
     dim.def(py::init<>());
     dim.def(py::init<value_type&>(),
             py::arg("dimension"),
@@ -121,6 +121,36 @@ void regclass_graph_Dimension(py::module m) {
                 :return: Value of the dimension.
                 :rtype: int
             )");
+
+    /// Symbol-related methods: START
+    dim.def("has_symbol",
+            &ov::Dimension::has_symbol,
+            R"(
+              Check if Dimension has meaningful symbol.
+
+              :return: True if symbol was set, else False.
+              :rtype: bool
+            )");
+    dim.def("get_symbol",
+            &ov::Dimension::get_symbol,
+            R"(
+                Return this dimension's symbol as Symbol object.
+
+                :return: Value of the dimension.
+                :rtype: openvino.Symbol
+            )");
+
+    dim.def("set_symbol",
+            &ov::Dimension::set_symbol,
+            py::arg("symbol"),
+            R"(
+                Sets provided Symbol as this dimension's symbol.
+
+                :param symbol: The symbol to set to this dimension.
+                :type symbol: openvino.Symbol
+            )");
+    /// Symbol-related methods: END
+
     dim.def("same_scheme",
             &ov::Dimension::same_scheme,
             py::arg("dim"),
@@ -188,7 +218,7 @@ void regclass_graph_Dimension(py::module m) {
     });
 
     dim.def("__repr__", [](const ov::Dimension& self) -> std::string {
-        return "<Dimension: " + py::cast(self).attr("__str__")().cast<std::string>() + ">";
+        return "<" + Common::get_class_name(self) + ": " + py::cast(self).attr("__str__")().cast<std::string>() + ">";
     });
 
     dim.def("to_string", &ov::Dimension::to_string);

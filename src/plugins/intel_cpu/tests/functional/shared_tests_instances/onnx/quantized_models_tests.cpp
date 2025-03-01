@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -8,5 +8,5 @@
 using namespace ONNXTestsDefinitions;
 
 INSTANTIATE_TEST_SUITE_P(ONNXQuantizedModels, QuantizedModelsTests,
-                        ::testing::Values(CommonTestUtils::DEVICE_CPU),
+                        ::testing::Values(ov::test::utils::DEVICE_CPU),
                         QuantizedModelsTests::getTestCaseName);

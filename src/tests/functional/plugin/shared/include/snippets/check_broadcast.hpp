@@ -12,7 +12,7 @@ namespace snippets {
 
 class CheckBroadcastTestCaseParams {
 public:
-    std::pair<ov::PartialShape, ov::PartialShape> input_shapes;
+    std::pair<InputShape, InputShape> input_shapes;
     ov::op::AutoBroadcastSpec broadcast;
     size_t num_nodes;
     size_t num_subgraphs;
@@ -24,8 +24,7 @@ typedef std::tuple <
     std::string                   // target device
 > CheckBroadcastParams;
 
-class CheckBroadcast : public testing::WithParamInterface<CheckBroadcastParams>,
-                virtual public ov::test::SnippetsTestsCommon {
+class CheckBroadcast : public testing::WithParamInterface<CheckBroadcastParams>, virtual public SnippetsTestsCommon {
 public:
     static std::string getTestCaseName(testing::TestParamInfo<CheckBroadcastParams> obj);
 

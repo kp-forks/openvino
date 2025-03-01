@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -9,7 +9,7 @@
 
 #include "helper_ops/internal_operation.hpp"
 #include "openvino/frontend/decoder.hpp"
-#include "quantization_info.hpp"
+#include "openvino/frontend/tensorflow_lite/quantization_info.hpp"
 
 namespace ov {
 namespace frontend {
@@ -23,7 +23,7 @@ public:
                 std::shared_ptr<ov::frontend::tensorflow_lite::QuantizationInfo> info,
                 const element::Type& type,
                 const std::shared_ptr<DecoderBase>& decoder = nullptr)
-        : ov::frontend::tensorflow::InternalOperation(decoder, OutputVector{data}, 1),
+        : ov::frontend::tensorflow::InternalOperation(decoder, OutputVector{data}, 1, "TFLQuantize"),
           m_info(info),
           m_type(type),
           m_original_type(type) {

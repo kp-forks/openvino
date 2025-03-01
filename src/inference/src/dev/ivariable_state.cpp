@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -18,10 +18,10 @@ void ov::IVariableState::reset() {
     OPENVINO_NOT_IMPLEMENTED;
 }
 
-void ov::IVariableState::set_state(const ov::Tensor& state) {
+void ov::IVariableState::set_state(const ov::SoPtr<ov::ITensor>& state) {
     m_state = state;
 }
 
-const ov::Tensor& ov::IVariableState::get_state() const {
+ov::SoPtr<ov::ITensor> ov::IVariableState::get_state() const {
     return m_state;
 }

@@ -1,22 +1,25 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "gtest/gtest.h"
-#include "ngraph/ngraph.hpp"
-#include "util/type_prop.hpp"
+#include "openvino/op/deformable_convolution.hpp"
+
+#include <gtest/gtest.h>
+
+#include "common_test_utils/type_prop.hpp"
+#include "openvino/core/coordinate_diff.hpp"
 
 using namespace std;
-using namespace ngraph;
+using namespace ov;
 using namespace testing;
 
 TEST(type_prop, deformable_convolution_partial_auto_padding_same) {
     PartialShape data_batch_pshape{1, 4, 5, 5};
     PartialShape offsets_pshape{1, 36, 5, 5};
     PartialShape filters_pshape{4, 1, 3, 3};
-    set_shape_labels(data_batch_pshape, 10);
-    set_shape_labels(offsets_pshape, 20);
-    set_shape_labels(filters_pshape, 30);
+    set_shape_symbols(data_batch_pshape);
+    auto o_symbols = set_shape_symbols(offsets_pshape);
+    auto f_symbols = set_shape_symbols(filters_pshape);
     const element::Type_t et = element::f32;
 
     Strides strides{1, 1};
@@ -27,9 +30,9 @@ TEST(type_prop, deformable_convolution_partial_auto_padding_same) {
     const int64_t group = 4;
     const int64_t deformable_group = 2;
 
-    auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-    auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-    auto filters = make_shared<op::Parameter>(et, filters_pshape);
+    auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+    auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+    auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
     auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                       offsets,
                                                                       filters,
@@ -41,8 +44,8 @@ TEST(type_prop, deformable_convolution_partial_auto_padding_same) {
                                                                       group,
                                                                       deformable_group);
 
-    EXPECT_THAT(get_shape_labels(deformable_conv->get_output_partial_shape(0)),
-                ElementsAre(10, 30, ov::no_label, ov::no_label));
+    EXPECT_THAT(get_shape_symbols(deformable_conv->get_output_partial_shape(0)),
+                ElementsAre(o_symbols[0], f_symbols[0], nullptr, nullptr));
     EXPECT_EQ(deformable_conv->get_output_partial_shape(0), (PartialShape{1, 4, 5, 5}));
     EXPECT_EQ(deformable_conv->get_pads_begin(), (CoordinateDiff{1, 1}));
     EXPECT_EQ(deformable_conv->get_pads_end(), (CoordinateDiff{1, 1}));
@@ -62,9 +65,9 @@ TEST(type_prop, deformable_convolution_partial_auto_padding_same_lower_data_batc
     const int64_t group = 4;
     const int64_t deformable_group = 2;
 
-    auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-    auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-    auto filters = make_shared<op::Parameter>(et, filters_pshape);
+    auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+    auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+    auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
     auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                       offsets,
                                                                       filters,
@@ -95,9 +98,9 @@ TEST(type_prop, deformable_convolution_partial_auto_padding_same_upper_data_batc
     const int64_t group = 4;
     const int64_t deformable_group = 2;
 
-    auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-    auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-    auto filters = make_shared<op::Parameter>(et, filters_pshape);
+    auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+    auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+    auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
     auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                       offsets,
                                                                       filters,
@@ -128,9 +131,9 @@ TEST(type_prop, deformable_convolution_partial_auto_padding_same_spatial_dims_dy
     const int64_t group = 4;
     const int64_t deformable_group = 2;
 
-    auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-    auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-    auto filters = make_shared<op::Parameter>(et, filters_pshape);
+    auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+    auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+    auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
     auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                       offsets,
                                                                       filters,
@@ -151,17 +154,17 @@ TEST(type_prop, deformable_convolution_data_batch_dynamic) {
     PartialShape data_batch_pshape{PartialShape::dynamic()};
     PartialShape offsets_pshape{2, 36, 5, 5};
     PartialShape filters_pshape{4, 4, 3, 3};
-    set_shape_labels(offsets_pshape, 20);
-    set_shape_labels(filters_pshape, 30);
+    auto o_symbols = set_shape_symbols(offsets_pshape);
+    auto f_symbols = set_shape_symbols(filters_pshape);
     const element::Type_t et = element::f32;
 
     const auto auto_pad = op::PadType::EXPLICIT;
     const int64_t group = 2;
     const int64_t deformable_group = 2;
 
-    auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-    auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-    auto filters = make_shared<op::Parameter>(et, filters_pshape);
+    auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+    auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+    auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
     auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                       offsets,
                                                                       filters,
@@ -179,8 +182,8 @@ TEST(type_prop, deformable_convolution_data_batch_dynamic) {
     EXPECT_EQ(deformable_conv->get_pads_begin(), (CoordinateDiff{0, 0}));
     EXPECT_EQ(deformable_conv->get_pads_end(), (CoordinateDiff{0, 0}));
     EXPECT_EQ(deformable_conv->get_output_partial_shape(0), (PartialShape{2, 4, {1, -1}, {1, -1}}));
-    EXPECT_THAT(get_shape_labels(deformable_conv->get_output_partial_shape(0)),
-                ElementsAre(20, 30, ov::no_label, ov::no_label));
+    EXPECT_THAT(get_shape_symbols(deformable_conv->get_output_partial_shape(0)),
+                ElementsAre(o_symbols[0], f_symbols[0], nullptr, nullptr));
 }
 
 TEST(type_prop, deformable_convolution_offsets_dynamic) {
@@ -193,9 +196,9 @@ TEST(type_prop, deformable_convolution_offsets_dynamic) {
     const int64_t group = 2;
     const int64_t deformable_group = 2;
 
-    auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-    auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-    auto filters = make_shared<op::Parameter>(et, filters_pshape);
+    auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+    auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+    auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
     auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                       offsets,
                                                                       filters,
@@ -225,9 +228,9 @@ TEST(type_prop, deformable_convolution_auto_pad_same_filters_dynamic) {
     const int64_t group = 2;
     const int64_t deformable_group = 2;
 
-    auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-    auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-    auto filters = make_shared<op::Parameter>(et, filters_pshape);
+    auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+    auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+    auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
     auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                       offsets,
                                                                       filters,
@@ -257,9 +260,9 @@ TEST(type_prop, deformable_convolution_deformable_data_batch_and_filters_dynamic
     const int64_t group = 2;
     const int64_t deformable_group = 2;
 
-    auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-    auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-    auto filters = make_shared<op::Parameter>(et, filters_pshape);
+    auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+    auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+    auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
     auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                       offsets,
                                                                       filters,
@@ -287,9 +290,9 @@ TEST(type_prop, deformable_convolution_deformable_all_inputs_dynamic) {
     const int64_t group = 2;
     const int64_t deformable_group = 2;
 
-    auto data_batch = make_shared<op::Parameter>(et, dyn_pshape);
-    auto offsets = make_shared<op::Parameter>(et, dyn_pshape);
-    auto filters = make_shared<op::Parameter>(et, dyn_pshape);
+    auto data_batch = make_shared<ov::op::v0::Parameter>(et, dyn_pshape);
+    auto offsets = make_shared<ov::op::v0::Parameter>(et, dyn_pshape);
+    auto filters = make_shared<ov::op::v0::Parameter>(et, dyn_pshape);
     auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                       offsets,
                                                                       filters,
@@ -318,9 +321,9 @@ TEST(type_prop, deformable_convolution_invalid_et_inputs) {
     element::Type_t boolean_et = element::boolean;
 
     try {
-        auto data_batch = make_shared<op::Parameter>(element::f16, data_batch_pshape);
-        auto offsets = make_shared<op::Parameter>(float_et, offsets_pshape);
-        auto filters = make_shared<op::Parameter>(float_et, filters_pshape);
+        auto data_batch = make_shared<ov::op::v0::Parameter>(element::f16, data_batch_pshape);
+        auto offsets = make_shared<ov::op::v0::Parameter>(float_et, offsets_pshape);
+        auto filters = make_shared<ov::op::v0::Parameter>(float_et, filters_pshape);
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                           offsets,
                                                                           filters,
@@ -339,9 +342,9 @@ TEST(type_prop, deformable_convolution_invalid_et_inputs) {
     }
 
     try {
-        auto data_batch = make_shared<op::Parameter>(float_et, data_batch_pshape);
-        auto offsets = make_shared<op::Parameter>(float_et, offsets_pshape);
-        auto filters = make_shared<op::Parameter>(element::f16, filters_pshape);
+        auto data_batch = make_shared<ov::op::v0::Parameter>(float_et, data_batch_pshape);
+        auto offsets = make_shared<ov::op::v0::Parameter>(float_et, offsets_pshape);
+        auto filters = make_shared<ov::op::v0::Parameter>(element::f16, filters_pshape);
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                           offsets,
                                                                           filters,
@@ -360,9 +363,9 @@ TEST(type_prop, deformable_convolution_invalid_et_inputs) {
     }
 
     try {
-        auto data_batch = make_shared<op::Parameter>(float_et, data_batch_pshape);
-        auto offsets = make_shared<op::Parameter>(element::f16, offsets_pshape);
-        auto filters = make_shared<op::Parameter>(float_et, filters_pshape);
+        auto data_batch = make_shared<ov::op::v0::Parameter>(float_et, data_batch_pshape);
+        auto offsets = make_shared<ov::op::v0::Parameter>(element::f16, offsets_pshape);
+        auto filters = make_shared<ov::op::v0::Parameter>(float_et, filters_pshape);
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                           offsets,
                                                                           filters,
@@ -381,9 +384,9 @@ TEST(type_prop, deformable_convolution_invalid_et_inputs) {
     }
 
     try {
-        auto data_batch = make_shared<op::Parameter>(boolean_et, data_batch_pshape);
-        auto offsets = make_shared<op::Parameter>(boolean_et, offsets_pshape);
-        auto filters = make_shared<op::Parameter>(boolean_et, filters_pshape);
+        auto data_batch = make_shared<ov::op::v0::Parameter>(boolean_et, data_batch_pshape);
+        auto offsets = make_shared<ov::op::v0::Parameter>(boolean_et, offsets_pshape);
+        auto filters = make_shared<ov::op::v0::Parameter>(boolean_et, filters_pshape);
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                           offsets,
                                                                           filters,
@@ -410,9 +413,9 @@ TEST(type_prop, deformable_convolution_invalid_input_ranks) {
         const PartialShape offsets_pshape{1, 4, 4, 4};
         const PartialShape filters_pshape{4, 4, 3, 3};
 
-        auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-        auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-        auto filters = make_shared<op::Parameter>(et, filters_pshape);
+        auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+        auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+        auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                           offsets,
                                                                           filters,
@@ -434,9 +437,9 @@ TEST(type_prop, deformable_convolution_invalid_input_ranks) {
         const PartialShape offsets_pshape{1, 4, 4, 4, 4};
         const PartialShape filters_pshape{4, 4, 3, 3};
 
-        auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-        auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-        auto filters = make_shared<op::Parameter>(et, filters_pshape);
+        auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+        auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+        auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                           offsets,
                                                                           filters,
@@ -458,9 +461,9 @@ TEST(type_prop, deformable_convolution_invalid_input_ranks) {
         const PartialShape offsets_pshape{1, 4, 4, 4};
         const PartialShape filters_pshape{4, 4, 3, 3, 3};
 
-        auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-        auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-        auto filters = make_shared<op::Parameter>(et, filters_pshape);
+        auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+        auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+        auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                           offsets,
                                                                           filters,
@@ -482,9 +485,9 @@ TEST(type_prop, deformable_convolution_invalid_input_ranks) {
         const PartialShape offsets_pshape{1, 4, 4, 4, 4};
         const PartialShape filters_pshape{4, 4, 3, 3, 3};
 
-        auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-        auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-        auto filters = make_shared<op::Parameter>(et, filters_pshape);
+        auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+        auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+        auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                           offsets,
                                                                           filters,
@@ -506,9 +509,9 @@ TEST(type_prop, deformable_convolution_invalid_input_ranks) {
         const PartialShape offsets_pshape{1, 4, 4};
         const PartialShape filters_pshape{4, 4, 3};
 
-        auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-        auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-        auto filters = make_shared<op::Parameter>(et, filters_pshape);
+        auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+        auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+        auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                           offsets,
                                                                           filters,
@@ -539,9 +542,9 @@ TEST(type_prop, deformable_convolution_invalid_groups) {
     const int64_t group = 0;
     const int64_t deformable_group = 2;
 
-    auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-    auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-    auto filters = make_shared<op::Parameter>(et, filters_pshape);
+    auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+    auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+    auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
 
     try {
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
@@ -578,9 +581,9 @@ TEST(type_prop, deformable_convolution_invalid_deformable_groups) {
     const int64_t group = 4;
     const int64_t deformable_group = 0;
 
-    auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-    auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-    auto filters = make_shared<op::Parameter>(et, filters_pshape);
+    auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+    auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+    auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
 
     try {
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
@@ -618,9 +621,9 @@ TEST(type_prop, deformable_convolution_invalid_offsets_channels_dim) {
         const int64_t group = 4;
         const int64_t deformable_group = 2;
 
-        auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-        auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-        auto filters = make_shared<op::Parameter>(et, filters_pshape);
+        auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+        auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+        auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                           offsets,
                                                                           filters,
@@ -660,9 +663,9 @@ TEST(type_prop, deformable_convolution_invalid_offsets_channels_dim) {
         const int64_t group = 4;
         const int64_t deformable_group = 2;
 
-        auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-        auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-        auto filters = make_shared<op::Parameter>(et, filters_pshape);
+        auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+        auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+        auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                           offsets,
                                                                           filters,
@@ -698,9 +701,9 @@ TEST(type_prop, deformable_convolution_invalid_offsets_batch_dim) {
     const int64_t group = 4;
     const int64_t deformable_group = 2;
 
-    auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-    auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-    auto filters = make_shared<op::Parameter>(et, filters_pshape);
+    auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+    auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+    auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
 
     try {
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
@@ -737,9 +740,9 @@ TEST(type_prop, deformable_convolution_invalid_data_batch_channels_dim_with_grou
     const int64_t group = 4;
     const int64_t deformable_group = 2;
 
-    auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-    auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-    auto filters = make_shared<op::Parameter>(et, filters_pshape);
+    auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+    auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+    auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
 
     try {
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
@@ -776,9 +779,9 @@ TEST(type_prop, deformable_convolution_invalid_filters_channels_dim_with_group) 
     const int64_t group = 4;
     const int64_t deformable_group = 2;
 
-    auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-    auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-    auto filters = make_shared<op::Parameter>(et, filters_pshape);
+    auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+    auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+    auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
 
     try {
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
@@ -815,9 +818,9 @@ TEST(type_prop, deformable_convolution_incompatible_data_batch_and_filters_chann
     const int64_t group = 4;
     const int64_t deformable_group = 2;
 
-    auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-    auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-    auto filters = make_shared<op::Parameter>(et, filters_pshape);
+    auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+    auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+    auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
 
     try {
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
@@ -856,9 +859,9 @@ TEST(type_prop, deformable_convolution_invalid_offsets_spatial_dims) {
     const int64_t group = 4;
     const int64_t deformable_group = 2;
 
-    auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-    auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-    auto filters = make_shared<op::Parameter>(et, filters_pshape);
+    auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+    auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+    auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
 
     try {
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
@@ -893,9 +896,9 @@ TEST(type_prop, deformable_convolution_invalid_conv_param_spatial_dims) {
         CoordinateDiff pads_begin{0, 0};
         CoordinateDiff pads_end{0, 0};
 
-        auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-        auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-        auto filters = make_shared<op::Parameter>(et, PartialShape::dynamic());
+        auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+        auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+        auto filters = make_shared<ov::op::v0::Parameter>(et, PartialShape::dynamic());
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                           offsets,
                                                                           filters,
@@ -915,9 +918,9 @@ TEST(type_prop, deformable_convolution_invalid_conv_param_spatial_dims) {
         CoordinateDiff pads_begin{0, 0};
         CoordinateDiff pads_end{0, 0};
 
-        auto data_batch = make_shared<op::Parameter>(et, PartialShape::dynamic());
-        auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-        auto filters = make_shared<op::Parameter>(et, filters_pshape);
+        auto data_batch = make_shared<ov::op::v0::Parameter>(et, PartialShape::dynamic());
+        auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+        auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                           offsets,
                                                                           filters,
@@ -939,9 +942,9 @@ TEST(type_prop, deformable_convolution_invalid_conv_param_spatial_dims) {
         CoordinateDiff pads_begin{0, 0};
         CoordinateDiff pads_end{0, 0};
 
-        auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-        auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-        auto filters = make_shared<op::Parameter>(et, PartialShape::dynamic());
+        auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+        auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+        auto filters = make_shared<ov::op::v0::Parameter>(et, PartialShape::dynamic());
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                           offsets,
                                                                           filters,
@@ -961,9 +964,9 @@ TEST(type_prop, deformable_convolution_invalid_conv_param_spatial_dims) {
         CoordinateDiff pads_begin{0, 0};
         CoordinateDiff pads_end{0, 0};
 
-        auto data_batch = make_shared<op::Parameter>(et, PartialShape::dynamic());
-        auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-        auto filters = make_shared<op::Parameter>(et, filters_pshape);
+        auto data_batch = make_shared<ov::op::v0::Parameter>(et, PartialShape::dynamic());
+        auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+        auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                           offsets,
                                                                           filters,
@@ -985,9 +988,9 @@ TEST(type_prop, deformable_convolution_invalid_conv_param_spatial_dims) {
         CoordinateDiff pads_begin{0, 0, 0};
         CoordinateDiff pads_end{0, 0};
 
-        auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-        auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-        auto filters = make_shared<op::Parameter>(et, PartialShape::dynamic());
+        auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+        auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+        auto filters = make_shared<ov::op::v0::Parameter>(et, PartialShape::dynamic());
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                           offsets,
                                                                           filters,
@@ -1007,9 +1010,9 @@ TEST(type_prop, deformable_convolution_invalid_conv_param_spatial_dims) {
         CoordinateDiff pads_begin{0, 0};
         CoordinateDiff pads_end{0};
 
-        auto data_batch = make_shared<op::Parameter>(et, PartialShape::dynamic());
-        auto offsets = make_shared<op::Parameter>(et, offsets_pshape);
-        auto filters = make_shared<op::Parameter>(et, filters_pshape);
+        auto data_batch = make_shared<ov::op::v0::Parameter>(et, PartialShape::dynamic());
+        auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_pshape);
+        auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
         auto deformable_conv = make_shared<op::v1::DeformableConvolution>(data_batch,
                                                                           offsets,
                                                                           filters,
@@ -1031,9 +1034,9 @@ protected:
 };
 
 TEST_F(TypePropDeformableConvolutionV1Test, default_ctor) {
-    const auto data = make_shared<op::Parameter>(element::f32, PartialShape{1, 4, 5, 5});
-    const auto offsets = make_shared<op::Parameter>(element::f32, PartialShape{1, 36, 7, 2});
-    const auto filters = make_shared<op::Parameter>(element::f32, PartialShape{4, 1, 3, 3});
+    const auto data = make_shared<ov::op::v0::Parameter>(element::f32, PartialShape{1, 4, 5, 5});
+    const auto offsets = make_shared<ov::op::v0::Parameter>(element::f32, PartialShape{1, 36, 7, 2});
+    const auto filters = make_shared<ov::op::v0::Parameter>(element::f32, PartialShape{4, 1, 3, 3});
 
     const auto op = make_op();
     op->set_arguments(OutputVector{data, offsets, filters});
@@ -1060,19 +1063,20 @@ TEST_F(TypePropDeformableConvolutionV1Test, interval_shapes) {
     PartialShape data_batch_pshape{{1, 3}, {2, 6}, {1, 5}, {3, 10}};
     PartialShape offsets_shape{1, 36, 4, 5};
     PartialShape filters_pshape{{2, 5}, {1, 3}, {2, 3}, 3};
-    set_shape_labels(data_batch_pshape, 10);
-    set_shape_labels(offsets_shape, 20);
-    set_shape_labels(filters_pshape, 30);
+    set_shape_symbols(data_batch_pshape);
+    auto o_symbols = set_shape_symbols(offsets_shape);
+    auto f_symbols = set_shape_symbols(filters_pshape);
 
     const element::Type_t et = element::f32;
     const auto auto_pad = op::PadType::EXPLICIT;
 
-    const auto data_batch = make_shared<op::Parameter>(et, data_batch_pshape);
-    const auto offsets = make_shared<op::Parameter>(et, offsets_shape);
-    const auto filters = make_shared<op::Parameter>(et, filters_pshape);
+    const auto data_batch = make_shared<ov::op::v0::Parameter>(et, data_batch_pshape);
+    const auto offsets = make_shared<ov::op::v0::Parameter>(et, offsets_shape);
+    const auto filters = make_shared<ov::op::v0::Parameter>(et, filters_pshape);
     const auto op = make_op(data_batch, offsets, filters, Strides{}, empty_pad, empty_pad, Strides{}, auto_pad, 4, 2);
 
-    EXPECT_THAT(get_shape_labels(op->get_output_partial_shape(0)), ElementsAre(10, 30, ov::no_label, ov::no_label));
+    EXPECT_THAT(get_shape_symbols(op->get_output_partial_shape(0)),
+                ElementsAre(o_symbols[0], f_symbols[0], nullptr, nullptr));
     EXPECT_EQ(op->get_output_partial_shape(0), PartialShape({1, {2, 5}, {1, 4}, {1, 8}}));
     EXPECT_EQ(op->get_pads_begin(), (CoordinateDiff{0, 0}));
     EXPECT_EQ(op->get_pads_end(), (CoordinateDiff{0, 0}));

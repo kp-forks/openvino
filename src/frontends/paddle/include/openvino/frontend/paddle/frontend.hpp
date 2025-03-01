@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -21,7 +21,7 @@ namespace paddle {
 class OpPlace;
 class TensorPlace;
 
-class PADDLE_API FrontEnd : public ov::frontend::FrontEnd {
+class PADDLE_FRONTEND_API FrontEnd : public ov::frontend::FrontEnd {
 public:
     using Ptr = std::shared_ptr<FrontEnd>;
     FrontEnd();
@@ -57,6 +57,10 @@ public:
     std::string get_name() const override;
 
     void add_extension(const std::shared_ptr<ov::Extension>& extension) override;
+
+    /// \brief Runs normalization passes on Model that was loaded with partial conversion
+    /// \param Model partially converted OV Model
+    void normalize(const std::shared_ptr<ov::Model>& model) const override;
 
 protected:
     /// \brief Check if FrontEnd can recognize model from given parts

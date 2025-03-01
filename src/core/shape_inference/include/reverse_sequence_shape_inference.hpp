@@ -1,16 +1,17 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 #pragma once
 
-#include <openvino/core/validation_util.hpp>
-#include <openvino/op/reverse_sequence.hpp>
+#include "openvino/core/validation_util.hpp"
+#include "openvino/op/reverse_sequence.hpp"
+#include "utils.hpp"
 
 namespace ov {
 namespace op {
 namespace v0 {
-template <class TShape>
-std::vector<TShape> shape_infer(const ReverseSequence* op, const std::vector<TShape>& input_shapes) {
+template <class TShape, class TRShape = result_shape_t<TShape>>
+std::vector<TRShape> shape_infer(const ReverseSequence* op, const std::vector<TShape>& input_shapes) {
     NODE_VALIDATION_CHECK(op, input_shapes.size() == 2);
     using DimType = typename TShape::value_type;
 
@@ -28,35 +29,26 @@ std::vector<TShape> shape_infer(const ReverseSequence* op, const std::vector<TSh
                           seq_lengths_rank.compatible(1),
                           "Sequence lengths rank must be equal to 1. Got: ",
                           seq_lengths_pshape);
-    auto output_pshape = data_pshape;
+    auto output_shapes = std::vector<TRShape>{data_pshape};
+    auto& output_pshape = output_shapes[0];
     if (data_rank.is_static() && seq_lengths_rank.is_static()) {
-        OPENVINO_SUPPRESS_DEPRECATED_START
-        const auto normalized_batch_axis = ov::normalize_axis(op, op->get_origin_batch_axis(), data_rank);
-        OPENVINO_SUPPRESS_DEPRECATED_END
-        DimType merged_sequence_length;
-        NODE_VALIDATION_CHECK(
-            op,
-            DimType::merge(merged_sequence_length, data_pshape[normalized_batch_axis], seq_lengths_pshape[0]),
-            "Sequence lengths input size (",
-            seq_lengths_pshape[0],
-            ") is not equal to batch axis dimension of data input (",
-            data_pshape[normalized_batch_axis],
-            ") (argument shape: ",
-            data_pshape,
-            ", sequence indices shape: ",
-            seq_lengths_pshape,
-            ").");
-        output_pshape[normalized_batch_axis] = merged_sequence_length;
+        const auto normalized_batch_axis = ov::util::try_normalize_axis(op->get_origin_batch_axis(), data_rank, *op);
+        NODE_VALIDATION_CHECK(op,
+                              DimType::merge(output_pshape[normalized_batch_axis],
+                                             data_pshape[normalized_batch_axis],
+                                             seq_lengths_pshape[0]),
+                              "Sequence lengths input size (",
+                              seq_lengths_pshape[0],
+                              ") is not equal to batch axis dimension of data input (",
+                              data_pshape[normalized_batch_axis],
+                              ") (argument shape: ",
+                              data_pshape,
+                              ", sequence indices shape: ",
+                              seq_lengths_pshape,
+                              ").");
     }
 
-    return {output_pshape};
-}
-
-template <class TShape>
-void shape_infer(const ReverseSequence* op,
-                 const std::vector<TShape>& input_shapes,
-                 std::vector<TShape>& output_shapes) {
-    output_shapes = shape_infer(op, input_shapes);
+    return output_shapes;
 }
 }  // namespace v0
 }  // namespace op

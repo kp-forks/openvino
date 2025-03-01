@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -23,19 +23,21 @@
 
 #ifndef OPENVINO_ENABLE_UNICODE_PATH_SUPPORT
 #    ifdef _WIN32
-#        if defined __INTEL_COMPILER || defined _MSC_VER
+#        if defined(__INTEL_COMPILER) || defined(_MSC_VER) || defined(__GNUC__)
 #            define OPENVINO_ENABLE_UNICODE_PATH_SUPPORT
 #        endif
-#    elif defined(__GNUC__) && (__GNUC__ > 5 || (__GNUC__ == 5 && __GNUC_MINOR__ > 2)) || defined(__clang__)
+#    elif defined(__clang__)
+#        define OPENVINO_ENABLE_UNICODE_PATH_SUPPORT
+#    elif defined(__GNUC__) && (__GNUC__ > 5 || (__GNUC__ == 5 && __GNUC_MINOR__ > 2))
 #        define OPENVINO_ENABLE_UNICODE_PATH_SUPPORT
 #    endif
 #endif
 
-#if defined _WIN32 || defined __CYGWIN__
+#if defined(_WIN32) || defined(__CYGWIN__)
 #    define OPENVINO_CORE_IMPORTS __declspec(dllimport)
 #    define OPENVINO_CORE_EXPORTS __declspec(dllexport)
 #    define _OPENVINO_HIDDEN_METHOD
-#elif defined(__GNUC__) && __GNUC__ >= 4
+#elif defined(__GNUC__) && (__GNUC__ >= 4) || defined(__clang__)
 #    define OPENVINO_CORE_IMPORTS   __attribute__((visibility("default")))
 #    define OPENVINO_CORE_EXPORTS   __attribute__((visibility("default")))
 #    define _OPENVINO_HIDDEN_METHOD __attribute__((visibility("hidden")))
@@ -64,4 +66,42 @@
 #elif defined(__riscv)
 #    define OPENVINO_ARCH_RISCV64
 #    define OPENVINO_ARCH_64_BIT
+#endif
+
+/**
+ * @brief Define no dangling attribute.
+ * Use it as C++ attribute e.g. OV_NO_DANGLING void my_func();
+ */
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#    define OV_NO_DANGLING [[gnu::no_dangling]]
+#else
+#    define OV_NO_DANGLING
+#endif
+
+#if !(defined(_MSC_VER) && __cplusplus == 199711L)
+#    if __cplusplus >= 201103L
+#        define OPENVINO_CPP_VER_AT_LEAST_11
+#        if __cplusplus >= 201402L
+#            define OPENVINO_CPP_VER_AT_LEAST_14
+#            if __cplusplus >= 201703L
+#                define OPENVINO_CPP_VER_AT_LEAST_17
+#                if __cplusplus >= 202002L
+#                    define OPENVINO_CPP_VER_AT_LEAST_20
+#                endif
+#            endif
+#        endif
+#    endif
+#elif defined(_MSC_VER) && __cplusplus == 199711L
+#    if _MSVC_LANG >= 201103L
+#        define OPENVINO_CPP_VER_AT_LEAST_11
+#        if _MSVC_LANG >= 201402L
+#            define OPENVINO_CPP_VER_AT_LEAST_14
+#            if _MSVC_LANG >= 201703L
+#                define OPENVINO_CPP_VER_AT_LEAST_17
+#                if _MSVC_LANG >= 202002L
+#                    define OPENVINO_CPP_VER_AT_LEAST_20
+#                endif
+#            endif
+#        endif
+#    endif
 #endif

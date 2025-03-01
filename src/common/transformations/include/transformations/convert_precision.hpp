@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -6,10 +6,12 @@
 
 #include <algorithm>
 #include <memory>
-#include <openvino/pass/graph_rewrite.hpp>
-#include <transformations_visibility.hpp>
 #include <unordered_map>
+#include <utility>
 #include <vector>
+
+#include "openvino/pass/matcher_pass.hpp"
+#include "transformations_visibility.hpp"
 
 namespace ov {
 namespace pass {
@@ -20,7 +22,7 @@ class TRANSFORMATIONS_API ConvertPrecision;
 }  // namespace ov
 
 /**
- * @ingroup ie_transformation_common_api
+ * @ingroup ov_transformation_common_api
  * @brief ConvertPrecision transformation convert precision for entire ov::Model
  * List of supported precision conversion:
  *    FROM -> TO
@@ -77,21 +79,29 @@ using type_to_fuse_map =
 
 class ov::pass::ConvertPrecision : public ov::pass::ModelPass {
 public:
-    OPENVINO_RTTI("ConvertPrecision", "0");
+    OPENVINO_MODEL_PASS_RTTI("ConvertPrecision");
     ConvertPrecision(ov::element::Type_t from,
                      ov::element::Type_t to,
                      type_to_fuse_map additional_type_to_fuse_map = {},
-                     bool keep_precision_sensitive_in_fp32 = false)
+                     bool keep_precision_sensitive_in_fp32 = false,
+                     bool convert_input_output_precision = true,
+                     bool store_original_precision_as_rt_attribute = false)
         : m_precisions(precisions_map{{from, to}}),
-          m_additional_type_to_fuse_map(additional_type_to_fuse_map),
-          m_keep_precision_sensitive_in_fp32(keep_precision_sensitive_in_fp32) {}
+          m_additional_type_to_fuse_map(std::move(additional_type_to_fuse_map)),
+          m_keep_precision_sensitive_in_fp32(keep_precision_sensitive_in_fp32),
+          m_convert_input_output_precision(convert_input_output_precision),
+          m_store_original_precision_as_rt_attribute(store_original_precision_as_rt_attribute) {}
 
     ConvertPrecision(const precisions_map& precisions,
                      const type_to_fuse_map& additional_type_to_fuse_map = {},
-                     bool keep_precision_sensitive_in_fp32 = false)
+                     bool keep_precision_sensitive_in_fp32 = false,
+                     bool convert_input_output_precision = true,
+                     bool store_original_precision_as_rt_attribute = false)
         : m_precisions(precisions),
           m_additional_type_to_fuse_map(additional_type_to_fuse_map),
-          m_keep_precision_sensitive_in_fp32(keep_precision_sensitive_in_fp32) {}
+          m_keep_precision_sensitive_in_fp32(keep_precision_sensitive_in_fp32),
+          m_convert_input_output_precision(convert_input_output_precision),
+          m_store_original_precision_as_rt_attribute(store_original_precision_as_rt_attribute) {}
 
     bool run_on_model(const std::shared_ptr<ov::Model>& m) override;
 
@@ -99,4 +109,6 @@ private:
     precisions_map m_precisions;
     type_to_fuse_map m_additional_type_to_fuse_map;
     bool m_keep_precision_sensitive_in_fp32;
+    bool m_convert_input_output_precision;
+    bool m_store_original_precision_as_rt_attribute;
 };

@@ -1,13 +1,14 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #pragma once
 
 #include <memory>
-#include <openvino/pass/graph_rewrite.hpp>
-#include <transformations_visibility.hpp>
 #include <vector>
+
+#include "openvino/pass/graph_rewrite.hpp"
+#include "transformations_visibility.hpp"
 
 namespace ov {
 namespace pass {
@@ -20,12 +21,12 @@ class TRANSFORMATIONS_API RemoveFilteringBoxesBySize;
 
 class ov::pass::FuseFilteringBoxesBySize : public ov::pass::GraphRewrite {
 public:
-    OPENVINO_RTTI("FuseFilteringBoxesBySize", "0");
+    OPENVINO_GRAPH_REWRITE_RTTI("FuseFilteringBoxesBySize");
     FuseFilteringBoxesBySize();
 };
 
 class ov::pass::RemoveFilteringBoxesBySize : public ov::pass::MatcherPass {
 public:
-    OPENVINO_RTTI("RemoveFilteringBoxesBySize", "0");
+    OPENVINO_MATCHER_PASS_RTTI("RemoveFilteringBoxesBySize");
     RemoveFilteringBoxesBySize();
 };

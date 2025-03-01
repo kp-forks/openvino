@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -22,7 +22,7 @@ std::string FrontendLibCloseTest::get_test_case_name(const testing::TestParamInf
 void FrontendLibCloseTest::SetUp() {
     SKIP_IF_CURRENT_TEST_IS_DISABLED()
     std::tie(frontend, model_path, exp_name) = GetParam();
-    model_path = CommonTestUtils::getModelFromTestModelZoo(model_path);
+    model_path = ov::test::utils::getModelFromTestModelZoo(model_path);
 }
 
 /**

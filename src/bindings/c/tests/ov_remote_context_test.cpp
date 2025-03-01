@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2022 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -21,19 +21,22 @@ protected:
         OV_EXPECT_OK(ov_core_create(&core));
         EXPECT_NE(nullptr, core);
 
-        OV_EXPECT_OK(ov_core_read_model(core, xml_file_name.c_str(), bin_file_name.c_str(), &model));
-        EXPECT_NE(nullptr, model);
-
+        // Check gpu plugin and hardware available.
+        bool gpu_device_available = false;
         char* info = nullptr;
         const char* key = ov_property_key_available_devices;
-        EXPECT_EQ(ov_core_get_property(core, "GPU", key, &info), ov_status_e::OK);
-        EXPECT_STRNE(info, nullptr);
-
-        if (strlen(info) == 0) {
-            ov_free(info);
-            GTEST_SKIP();
+        if (ov_core_get_property(core, "GPU", key, &info) == ov_status_e::OK) {
+            if (strlen(info) > 0) {
+                gpu_device_available = true;
+            }
         }
         ov_free(info);
+        if (!gpu_device_available) {
+            GTEST_SKIP();
+        }
+
+        OV_EXPECT_OK(ov_core_read_model(core, xml_file_name.c_str(), bin_file_name.c_str(), &model));
+        EXPECT_NE(nullptr, model);
 
         const unsigned int refVendorID = 0x8086;
         cl_uint n = 0;
@@ -44,11 +47,11 @@ protected:
         std::vector<cl_platform_id> platform_ids(n);
         err = clGetPlatformIDs(n, platform_ids.data(), NULL);
 
-        for (auto& id : platform_ids) {
+        for (auto const& id : platform_ids) {
             cl::Platform platform = cl::Platform(id);
             std::vector<cl::Device> devices;
             platform.getDevices(CL_DEVICE_TYPE_GPU, &devices);
-            for (auto& d : devices) {
+            for (auto const& d : devices) {
                 if (refVendorID == d.getInfo<CL_DEVICE_VENDOR_ID>()) {
                     cl_device = d;
                     cl_context = cl::Context(cl_device);
@@ -360,9 +363,9 @@ TEST_P(ov_remote_context_ocl, create_remote_tensor_nv12_from_ocl_image2D) {
     const int height = 480;
     const int width = 640;
     ov_shape_t shape_y = {0, nullptr};
-    int64_t dims_y[4] = {1, 1, height, width};
+    int64_t dims_y[4] = {1, height, width, 1};
     ov_shape_t shape_uv = {0, nullptr};
-    int64_t dims_uv[4] = {1, 2, height / 2, width / 2};
+    int64_t dims_uv[4] = {1, height / 2, width / 2, 2};
 
     cl_int err;
     cl_image_format image_format;
@@ -555,9 +558,9 @@ TEST_P(ov_remote_context_ocl, remote_tensor_nv12_inference) {
     EXPECT_NE(nullptr, context);
 
     ov_shape_t shape_y = {0, nullptr};
-    int64_t dims_y[4] = {1, 1, height, width};
+    int64_t dims_y[4] = {1, height, width, 1};
     ov_shape_t shape_uv = {0, nullptr};
-    int64_t dims_uv[4] = {1, 2, height / 2, width / 2};
+    int64_t dims_uv[4] = {1, height / 2, width / 2, 2};
 
     cl_int err;
     cl_image_format image_format;

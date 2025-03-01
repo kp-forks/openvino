@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -32,6 +32,8 @@ enum class pooling_mode : int32_t {
 struct pooling : public primitive_base<pooling> {
     CLDNN_DECLARE_PRIMITIVE(pooling)
 
+    pooling() : primitive_base("", {}) {}
+
     /// @brief Constructs pooling primitive.
     /// @param id This primitive id.
     /// @param input Input primitive id.
@@ -47,9 +49,8 @@ struct pooling : public primitive_base<pooling> {
             const ov::Shape& pads_begin = {0, 0},
             const ov::Shape& pads_end = {0, 0},
             ov::op::PadType auto_pad = ov::op::PadType::EXPLICIT,
-            ov::op::RoundingType rounding_type = ov::op::RoundingType::FLOOR,
-            const padding& output_padding = padding())
-        : primitive_base(id, {input}, {output_padding}),
+            ov::op::RoundingType rounding_type = ov::op::RoundingType::FLOOR)
+        : primitive_base(id, {input}),
           mode(static_cast<pooling_mode>(mode)),
           size(size),
           stride(stride),
@@ -75,9 +76,8 @@ struct pooling : public primitive_base<pooling> {
             const ov::Shape& pads_begin,
             const ov::Shape& pads_end,
             tensor output_size,
-            const data_types output_data_type,
-            const padding& output_padding = padding())
-        : primitive_base(id, {input}, {output_padding}, {optional_data_type{output_data_type}}),
+            const data_types output_data_type)
+        : primitive_base(id, {input}, 1, {optional_data_type{output_data_type}}),
           mode(static_cast<pooling_mode>(mode)),
           size(size),
           stride(stride),
@@ -113,9 +113,8 @@ struct pooling : public primitive_base<pooling> {
             int64_t axis,
             data_types index_element_type,
             tensor output_size,
-            const data_types output_data_type,
-            const padding& output_padding = padding())
-            : primitive_base(id, {input, indices_output}, {output_padding}, {optional_data_type{output_data_type}}),
+            const data_types output_data_type)
+            : primitive_base(id, {input, indices_output}, 1, {optional_data_type{output_data_type}}),
               indices_output(indices_output.pid),
               mode(pooling_mode::max),
               size(size),
@@ -134,7 +133,7 @@ struct pooling : public primitive_base<pooling> {
     /// @brief Primitive id which contains indices output.
     primitive_id indices_output;
     /// @brief Pooling mode.
-    pooling_mode mode;
+    pooling_mode mode = pooling_mode::max;
     /// @brief Pooling kernel size.
     ov::Shape size;
     /// @brief Defines shift in input buffer between adjacent calculations of output values.
@@ -146,13 +145,13 @@ struct pooling : public primitive_base<pooling> {
     /// @brief Defines a shift, relative to the end of padding shape.
     ov::Shape pads_end;
     /// @brief Defines how the padding is calculated.
-    ov::op::PadType auto_pad;
+    ov::op::PadType auto_pad = ov::op::PadType::EXPLICIT;
     /// @brief Defines a type of rounding to be applied.
-    ov::op::RoundingType rounding_type;
+    ov::op::RoundingType rounding_type = ov::op::RoundingType::CEIL;
     /// @brief first dimension of input that should be used to calculate the upper bound of index output.
     int64_t axis = 0;
     /// @brief Indicates that the primitive has user-defined output size (non-zero value).
-    bool with_output_size;
+    bool with_output_size = true;
     /// @brief User-defined output data size of the primitive (w/o padding).
     tensor output_size;
     /// @brief type of index output
@@ -198,9 +197,45 @@ struct pooling : public primitive_base<pooling> {
         #undef cmp_fields
     }
 
+    void save(BinaryOutputBuffer& ob) const override {
+        primitive_base<pooling>::save(ob);
+        ob << indices_output;
+        ob << make_data(&mode, sizeof(pooling_mode));
+        ob << size;
+        ob << stride;
+        ob << dilation;
+        ob << pads_begin;
+        ob << pads_end;
+        ob << make_data(&auto_pad, sizeof(ov::op::PadType));
+        ob << make_data(&rounding_type, sizeof(ov::op::RoundingType));
+        ob << axis;
+        ob << with_output_size;
+        ob << output_size;
+        ob << make_data(&index_element_type, sizeof(data_types));
+        ob << maxPoolOpset8Features;
+    }
+
+    void load(BinaryInputBuffer& ib) override {
+        primitive_base<pooling>::load(ib);
+        ib >> indices_output;
+        ib >> make_data(&mode, sizeof(pooling_mode));;
+        ib >> size;
+        ib >> stride;
+        ib >> dilation;
+        ib >> pads_begin;
+        ib >> pads_end;
+        ib >> make_data(&auto_pad, sizeof(ov::op::PadType));
+        ib >> make_data(&rounding_type, sizeof(ov::op::RoundingType));
+        ib >> axis;
+        ib >> with_output_size;
+        ib >> output_size;
+        ib >> make_data(&index_element_type, sizeof(data_types));
+        ib >> maxPoolOpset8Features;
+    }
+
 protected:
-    std::vector<std::reference_wrapper<const primitive_id>> get_dependencies() const override {
-        std::vector<std::reference_wrapper<const primitive_id>> ret;
+    std::vector<input_info> get_dependencies() const override {
+        std::vector<input_info> ret;
         if (!indices_output.empty())
             ret.push_back(indices_output);
         return ret;

@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -8,8 +8,6 @@
 #include <vector>
 
 namespace cldnn {
-
-
 struct roi_pooling : public primitive_base<roi_pooling> {
     CLDNN_DECLARE_PRIMITIVE(roi_pooling)
 
@@ -27,8 +25,6 @@ struct roi_pooling : public primitive_base<roi_pooling> {
                     spatial_bins_x(1),
                     spatial_bins_y(1) {}
 
-    DECLARE_OBJECT_TYPE_SERIALIZATION
-
     roi_pooling(const primitive_id& id,
                 const input_info& input_data,
                 const input_info& input_rois,
@@ -39,9 +35,8 @@ struct roi_pooling : public primitive_base<roi_pooling> {
                 float spatial_scale,
                 int output_dim = 0,
                 int spatial_bins_x = 1,
-                int spatial_bins_y = 1,
-                const padding& output_padding = padding())
-        : primitive_base(id, {input_data, input_rois}, {output_padding}),
+                int spatial_bins_y = 1)
+        : primitive_base(id, {input_data, input_rois}),
           mode(mode),
           position_sensitive(position_sensitive),
           pooled_width(pooled_width),
@@ -68,9 +63,8 @@ struct roi_pooling : public primitive_base<roi_pooling> {
                 int group_size,
                 int output_dim = 0,
                 int spatial_bins_x = 1,
-                int spatial_bins_y = 1,
-                const padding& output_padding = padding())
-        : primitive_base(id, inputs, {output_padding}),
+                int spatial_bins_y = 1)
+        : primitive_base(id, inputs),
           mode(mode),
           position_sensitive(position_sensitive),
           pooled_width(pooled_width),
@@ -136,6 +130,7 @@ struct roi_pooling : public primitive_base<roi_pooling> {
     }
 
     void save(BinaryOutputBuffer& ob) const override {
+        primitive_base<roi_pooling>::save(ob);
         ob << make_data(&mode, sizeof(pooling_mode));
         ob << position_sensitive;
         ob << pooled_width;
@@ -151,6 +146,7 @@ struct roi_pooling : public primitive_base<roi_pooling> {
     }
 
     void load(BinaryInputBuffer& ib) override {
+        primitive_base<roi_pooling>::load(ib);
         ib >> make_data(&mode, sizeof(pooling_mode));
         ib >> position_sensitive;
         ib >> pooled_width;

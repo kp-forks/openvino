@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 #pragma once
@@ -18,7 +18,8 @@ size_t calculate_num_spatial(const util::DeformableConvolutionBase* op, const st
     auto num_spatial = util::num_spatial_from_shapes(input_shapes[0], input_shapes[2], non_spatial_count);
 
     if (num_spatial == convolution::num_spatial_undefined && input_shapes[1].rank().is_static()) {
-        num_spatial = input_shapes[1].size() - non_spatial_count;
+        constexpr size_t offsets_shape_rank = 4;
+        num_spatial = offsets_shape_rank - non_spatial_count;
     }
 
     return num_spatial;
@@ -63,19 +64,19 @@ void deformable_group_divisible_dimension(const TDeformableConv* op, const TDim&
 }  // namespace deformable_conv
 
 namespace util {
-template <class TShape>
-std::vector<TShape> shape_infer(const DeformableConvolutionBase* op,
-                                const std::vector<TShape>& input_shapes,
-                                CoordinateDiff& pads_begin,
-                                CoordinateDiff& pads_end,
-                                const std::map<size_t, HostTensorPtr>& constant_data = {}) {
+template <class TShape, class TRShape = result_shape_t<TShape>>
+std::vector<TRShape> shape_infer(const DeformableConvolutionBase* op,
+                                 const std::vector<TShape>& input_shapes,
+                                 CoordinateDiff& pads_begin,
+                                 CoordinateDiff& pads_end) {
     static constexpr std::array<const char*, 4> names{"Input", "Offsets", "Filters", "Mask"};
     using namespace ov::util;
     using TDim = typename TShape::value_type;
 
     const auto num_spatial = deformable_conv::calculate_num_spatial(op, input_shapes);
 
-    TShape output_shape;
+    auto output_shapes = std::vector<TRShape>(1);
+    auto& output_shape = output_shapes[0];
     if (num_spatial != convolution::num_spatial_undefined) {
         const auto& data_shape = input_shapes[0];
         const auto& offsets_shape = input_shapes[1];
@@ -163,29 +164,27 @@ std::vector<TShape> shape_infer(const DeformableConvolutionBase* op,
         output_shape = PartialShape::dynamic();
     }
 
-    return {output_shape};
+    return output_shapes;
 }
 }  // namespace util
 
 namespace v1 {
-template <class TShape>
-std::vector<TShape> shape_infer(const DeformableConvolution* op,
-                                const std::vector<TShape>& input_shapes,
-                                CoordinateDiff& pads_begin,
-                                CoordinateDiff& pads_end,
-                                const std::map<size_t, HostTensorPtr>& constant_data = {}) {
+template <class TShape, class TRShape = result_shape_t<TShape>>
+std::vector<TRShape> shape_infer(const DeformableConvolution* op,
+                                 const std::vector<TShape>& input_shapes,
+                                 CoordinateDiff& pads_begin,
+                                 CoordinateDiff& pads_end) {
     NODE_VALIDATION_CHECK(op, input_shapes.size() == 3);
-    return util::shape_infer(op, input_shapes, pads_begin, pads_end, constant_data);
+    return util::shape_infer(op, input_shapes, pads_begin, pads_end);
 }
 }  // namespace v1
 
 namespace v8 {
-template <class TShape>
-std::vector<TShape> shape_infer(const DeformableConvolution* op,
-                                const std::vector<TShape>& input_shapes,
-                                CoordinateDiff& pads_begin,
-                                CoordinateDiff& pads_end,
-                                const std::map<size_t, HostTensorPtr>& constant_data = {}) {
+template <class TShape, class TRShape = result_shape_t<TShape>>
+std::vector<TRShape> shape_infer(const DeformableConvolution* op,
+                                 const std::vector<TShape>& input_shapes,
+                                 CoordinateDiff& pads_begin,
+                                 CoordinateDiff& pads_end) {
     const auto has_mask_shape = input_shapes.size() == 4;
     NODE_VALIDATION_CHECK(op, input_shapes.size() == 3 || has_mask_shape);
     using TDim = typename TShape::value_type;
@@ -199,7 +198,7 @@ std::vector<TShape> shape_infer(const DeformableConvolution* op,
     const auto offsets_rank = offsets_shape.rank();
 
     if (has_mask_shape) {
-        const auto mask_shape = input_shapes[3];
+        const auto& mask_shape = input_shapes[3];
         if (mask_shape.rank().is_static()) {
             if (filters_rank.is_static()) {
                 auto offsets_channels = filters_shape[2] * filters_shape[3] * op->get_deformable_group();
@@ -227,7 +226,7 @@ std::vector<TShape> shape_infer(const DeformableConvolution* op,
         }
     }
 
-    auto output_shapes = util::shape_infer(op, input_shapes, pads_begin, pads_end, constant_data);
+    auto output_shapes = util::shape_infer(op, input_shapes, pads_begin, pads_end);
     // post infer checks
     if (has_mask_shape && input_shapes[3].rank().is_static() && output_shapes[0].rank().is_static()) {
         auto mask_dim = input_shapes[3].begin() + util::spatial_dim_offset;

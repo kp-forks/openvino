@@ -5,10 +5,10 @@
 #pragma once
 
 #include <memory>
-#include <ngraph/pass/pass.hpp>
+#include "openvino/pass/pass.hpp"
 #include "snippets/generator.hpp"
 
-namespace ngraph {
+namespace ov {
 namespace snippets {
 namespace pass {
 
@@ -17,9 +17,9 @@ namespace pass {
  * @ingroup snippets
  * @brief PropagatePrecision transformation propagate precision from parameters to results.
  */
-class PropagatePrecision: public ngraph::pass::FunctionPass {
+class PropagatePrecision: public ov::pass::ModelPass {
 public:
-    OPENVINO_RTTI("PropagatePrecision", "0");
+    OPENVINO_MODEL_PASS_RTTI("snippets::pass::PropagatePrecision");
     PropagatePrecision(const std::shared_ptr<const TargetMachine>& target_machine);
     bool run_on_model(const std::shared_ptr<ov::Model>& m) override;
 
@@ -39,7 +39,7 @@ public:
         const element::Type& actual,
         const element::Type& required) noexcept;
 
-    static bool validate_and_infer_types_and_restore_outputs(const std::shared_ptr<ngraph::Node>& op);
+    static bool validate_and_infer_types_and_restore_outputs(const std::shared_ptr<ov::Node>& op);
 
 private:
     const std::shared_ptr<const TargetMachine> target_machine;
@@ -47,4 +47,4 @@ private:
 
 }  // namespace pass
 }  // namespace snippets
-}  // namespace ngraph
+}  // namespace ov

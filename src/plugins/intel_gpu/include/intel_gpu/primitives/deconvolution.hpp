@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -17,6 +17,9 @@ namespace cldnn {
 /// and stride and input padding parameters used in opposite sense as in convolution.
 struct deconvolution : public primitive_base<deconvolution> {
     CLDNN_DECLARE_PRIMITIVE(deconvolution)
+
+    deconvolution() : primitive_base("", {}) {}
+
     /// @brief Constructs deconvolution primitive.
     /// @param id This primitive id.
     /// @param input Input primitive id.
@@ -32,9 +35,8 @@ struct deconvolution : public primitive_base<deconvolution> {
                   const std::vector<primitive_id>& bias,
                   ov::Strides stride = {1, 1},
                   ov::CoordinateDiff pad = {0, 0},
-                  ov::Strides dilations = {1, 1},
-                  const padding& output_padding = padding())
-        : primitive_base(id, {input}, {output_padding}),
+                  ov::Strides dilations = {1, 1})
+        : primitive_base(id, {input}),
           pad(pad),
           stride(stride),
           dilations(dilations),
@@ -65,9 +67,8 @@ struct deconvolution : public primitive_base<deconvolution> {
                   uint32_t groups,
                   ov::Strides stride = {1, 1},
                   ov::CoordinateDiff pad = {0, 0},
-                  ov::Strides dilations = {1, 1},
-                  const padding& output_padding = padding())
-        : primitive_base(id, {input}, {output_padding}),
+                  ov::Strides dilations = {1, 1})
+        : primitive_base(id, {input}),
           pad(pad),
           stride(stride),
           dilations(dilations),
@@ -95,9 +96,8 @@ struct deconvolution : public primitive_base<deconvolution> {
                   const std::vector<primitive_id>& weights,
                   ov::Strides stride = {1, 1},
                   ov::CoordinateDiff pad = {0, 0},
-                  ov::Strides dilations = {1, 1},
-                  const padding& output_padding = padding())
-        : primitive_base(id, {input}, {output_padding}),
+                  ov::Strides dilations = {1, 1})
+        : primitive_base(id, {input}),
           pad(pad),
           stride(stride),
           dilations(dilations),
@@ -127,9 +127,8 @@ struct deconvolution : public primitive_base<deconvolution> {
                   uint32_t groups,
                   ov::Strides stride = {1, 1},
                   ov::CoordinateDiff pad = {0, 0},
-                  ov::Strides dilations = {1, 1},
-                  const padding& output_padding = padding())
-        : primitive_base(id, {input}, {output_padding}),
+                  ov::Strides dilations = {1, 1})
+        : primitive_base(id, {input}),
           pad(pad),
           stride(stride),
           dilations(dilations),
@@ -161,9 +160,8 @@ struct deconvolution : public primitive_base<deconvolution> {
                   ov::Strides stride,
                   ov::CoordinateDiff pad,
                   ov::Strides dilations,
-                  tensor output_size,
-                  const padding& output_padding = padding())
-        : primitive_base(id, {input}, {output_padding}),
+                  tensor output_size)
+        : primitive_base(id, {input}),
           pad(pad),
           stride(stride),
           dilations(dilations),
@@ -199,9 +197,8 @@ struct deconvolution : public primitive_base<deconvolution> {
                   ov::CoordinateDiff pad,
                   ov::Strides dilations,
                   tensor output_size,
-                  bool grouped_weights_shape,
-                  const padding& output_padding = padding())
-        : primitive_base(id, {input}, {output_padding}),
+                  bool grouped_weights_shape)
+        : primitive_base(id, {input}),
           pad(pad),
           stride(stride),
           dilations(dilations),
@@ -239,9 +236,8 @@ struct deconvolution : public primitive_base<deconvolution> {
                   ov::CoordinateDiff pads_begin,
                   ov::CoordinateDiff pads_end,
                   ov::CoordinateDiff out_padding,
-                  bool grouped_weights_shape,
-                  const padding& output_padding = padding())
-        : primitive_base(id, {input}, {output_padding}),
+                  bool grouped_weights_shape)
+        : primitive_base(id, {input}),
           pad(pad),
           stride(stride),
           dilations(dilations),
@@ -271,9 +267,8 @@ struct deconvolution : public primitive_base<deconvolution> {
                   ov::Strides stride,
                   ov::CoordinateDiff pad,
                   ov::Strides dilations,
-                  tensor output_size,
-                  const padding& output_padding = padding())
-        : primitive_base(id, {input}, {output_padding}),
+                  tensor output_size)
+        : primitive_base(id, {input}),
           pad(pad),
           stride(stride),
           dilations(dilations),
@@ -305,8 +300,7 @@ struct deconvolution : public primitive_base<deconvolution> {
                                                  tensor output_size,
                                                  ov::Strides stride = {1, 1},
                                                  ov::CoordinateDiff pad = {0, 0},
-                                                 ov::Strides dilations = {1, 1},
-                                                 const padding& output_padding = padding()) {
+                                                 ov::Strides dilations = {1, 1}) {
         return deconvolution(id,
                              input,
                              weights,
@@ -314,8 +308,7 @@ struct deconvolution : public primitive_base<deconvolution> {
                              stride,
                              pad,
                              dilations,
-                             output_size,
-                             output_padding);
+                             output_size);
     }
 
     /// @brief Constructs deconvolution primitive (w/o bias; computes input paddings to match output size).
@@ -334,16 +327,14 @@ struct deconvolution : public primitive_base<deconvolution> {
                                                  tensor output_size,
                                                  ov::Strides stride = {1, 1},
                                                  ov::CoordinateDiff pad = {0, 0},
-                                                 ov::Strides dilations = {1, 1},
-                                                 const padding& output_padding = padding())     {
+                                                 ov::Strides dilations = {1, 1})     {
         return deconvolution(id,
                              input,
                              weights,
                              stride,
                              pad,
                              dilations,
-                             output_size,
-                             output_padding);
+                             output_size);
     }
 
     /// @brief Defines logical pad value added to input tensor.
@@ -353,11 +344,11 @@ struct deconvolution : public primitive_base<deconvolution> {
     /// @brief Defines the distance in width and height between elements in the filter.
     ov::Strides dilations;
     /// @brief Indicates that the primitive has user-defined output size (non-zero value).
-    bool with_output_size;
+    bool with_output_size = true;
     /// @brief User-defined output data size of the primitive (w/o padding).
     tensor output_size;
     /// @brief Number of feature groups (grouped convolution). If more than 1 then weights/bias count needs to be 1.
-    uint32_t groups;
+    uint32_t groups = 1;
     /// @brief Defines a padding added to input image on left (x axis) and top (y axis).
     ov::CoordinateDiff pads_begin;
     /// @brief Defines a padding added to input image on right (x axis) and bottom (y axis).
@@ -365,7 +356,7 @@ struct deconvolution : public primitive_base<deconvolution> {
     /// @brief Defines additional amount of paddings per each spatial axis added to output tensor.
     ov::CoordinateDiff out_padding;
     /// @param grouped_weights_shape Defines if weights tensor has explicit group dimension.
-    bool grouped_weights_shape;
+    bool grouped_weights_shape = false;
     /// @brief Defines spatial shape of the output.
     ov::PartialShape output_partial_shape;
     /// @brief Data primitive id containing spatial shape of the output.
@@ -408,12 +399,48 @@ struct deconvolution : public primitive_base<deconvolution> {
         #undef cmp_fields
     }
 
+    void save(BinaryOutputBuffer& ob) const override {
+        primitive_base<deconvolution>::save(ob);
+        ob << pad;
+        ob << stride;
+        ob << dilations;
+        ob << with_output_size;
+        ob << output_size;
+        ob << groups;
+        ob << pads_begin;
+        ob << pads_end;
+        ob << out_padding;
+        ob << grouped_weights_shape;
+        ob << output_partial_shape;
+        ob << output_shape_id;
+        ob << weights;
+        ob << bias;
+    }
+
+    void load(BinaryInputBuffer& ib) override {
+        primitive_base<deconvolution>::load(ib);
+        ib >> pad;
+        ib >> stride;
+        ib >> dilations;
+        ib >> with_output_size;
+        ib >> output_size;
+        ib >> groups;
+        ib >> pads_begin;
+        ib >> pads_end;
+        ib >> out_padding;
+        ib >> grouped_weights_shape;
+        ib >> output_partial_shape;
+        ib >> output_shape_id;
+        ib >> *const_cast<primitive_id_arr*>(&weights);
+        ib >> *const_cast<primitive_id_arr*>(&bias);
+    }
+
 protected:
-    std::vector<std::reference_wrapper<const primitive_id>> get_dependencies() const override {
-        std::vector<std::reference_wrapper<const primitive_id>> ret;
+    std::vector<input_info> get_dependencies() const override {
+        std::vector<input_info> ret;
         ret.reserve(weights.size() + bias.size() + (output_shape_id.empty() ? 0 : 1));
-        for (auto& w : weights) ret.push_back(std::ref(w));
-        for (auto& b : bias) ret.push_back(std::ref(b));
+        for (auto& w : weights) ret.push_back(w);
+        for (auto& b : bias) ret.push_back(b);
         if (!output_shape_id.empty()) ret.push_back(output_shape_id);
 
         return ret;

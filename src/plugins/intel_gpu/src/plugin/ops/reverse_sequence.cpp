@@ -1,18 +1,17 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "intel_gpu/plugin/program.hpp"
+#include "intel_gpu/plugin/program_builder.hpp"
 #include "intel_gpu/plugin/common_utils.hpp"
 
-#include "ngraph/op/reverse_sequence.hpp"
+#include "openvino/op/reverse_sequence.hpp"
 
 #include "intel_gpu/primitives/reverse_sequence.hpp"
 
-namespace ov {
-namespace intel_gpu {
+namespace ov::intel_gpu {
 
-static void CreateReverseSequenceOp(Program& p, const std::shared_ptr<ngraph::op::v0::ReverseSequence>& op) {
+static void CreateReverseSequenceOp(ProgramBuilder& p, const std::shared_ptr<ov::op::v0::ReverseSequence>& op) {
     validate_inputs_count(op, {2});
     auto inputs = p.GetInputInfo(op);
     std::string layerName = layer_type_name_ID(op);
@@ -30,5 +29,4 @@ static void CreateReverseSequenceOp(Program& p, const std::shared_ptr<ngraph::op
 
 REGISTER_FACTORY_IMPL(v0, ReverseSequence);
 
-}  // namespace intel_gpu
-}  // namespace ov
+}  // namespace ov::intel_gpu

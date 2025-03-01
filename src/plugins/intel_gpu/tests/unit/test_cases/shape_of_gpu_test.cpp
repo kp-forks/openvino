@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -23,7 +23,7 @@ TEST(shape_of_gpu, bfyx) {
 
     topology topology;
     topology.add(input_layout("input", input->get_layout()));
-    topology.add(shape_of("shape_of", input_info("input"), 4, data_types::i32));
+    topology.add(shape_of("shape_of", input_info("input"), data_types::i32));
 
     network network(engine, topology, get_test_default_config(engine));
 
@@ -48,7 +48,7 @@ TEST(shape_of_gpu, bfyx_i64) {
 
     topology topology;
     topology.add(input_layout("input", input->get_layout()));
-    topology.add(shape_of("shape_of", input_info("input"), 4, data_types::i64));
+    topology.add(shape_of("shape_of", input_info("input"), data_types::i64));
 
     network network(engine, topology, get_test_default_config(engine));
 
@@ -66,6 +66,43 @@ TEST(shape_of_gpu, bfyx_i64) {
     }
 }
 
+void shape_of_cpu_impl_bfyx_i64(bool disable_usm = false);
+void shape_of_cpu_impl_bfyx_i64(bool disable_usm) {
+    auto engine = create_test_engine(engine_types::ocl, runtime_types::ocl, !disable_usm);
+
+    auto input = engine->allocate_memory({data_types::f32, format::bfyx, tensor{1, 2, 3, 3}});
+
+    topology topology;
+    topology.add(input_layout("input", input->get_layout()));
+    topology.add(shape_of("shape_of", input_info("input"), data_types::i64));
+
+    ExecutionConfig config = get_test_default_config(*engine);
+    config.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ {"shape_of", {format::bfyx, "", impl_types::cpu}} }));
+
+    network network(*engine, topology, config);
+
+    network.set_input_data("input", input);
+
+    auto outputs = network.execute();
+
+    auto output = outputs.at("shape_of").get_memory();
+    cldnn::mem_lock<int64_t> output_ptr(output, get_test_stream());
+
+    std::vector<int64_t> expected_results = {1, 2, 3, 3};
+
+    for (size_t i = 0; i < expected_results.size(); ++i) {
+        ASSERT_TRUE(are_equal(expected_results[i], output_ptr[i]));
+    }
+}
+
+TEST(shape_of_cpu_impl, bfyx_i64) {
+    shape_of_cpu_impl_bfyx_i64();
+}
+
+TEST(shape_of_cpu_impl, bfyx_i64_disable_usm) {
+    shape_of_cpu_impl_bfyx_i64(true);
+}
+
 TEST(shape_of_gpu, yxfb) {
     auto& engine = get_test_engine();
 
@@ -73,7 +110,7 @@ TEST(shape_of_gpu, yxfb) {
 
     topology topology;
     topology.add(input_layout("input", input->get_layout()));
-    topology.add(shape_of("shape_of", input_info("input"), 4, data_types::i32));
+    topology.add(shape_of("shape_of", input_info("input"), data_types::i32));
 
     network network(engine, topology, get_test_default_config(engine));
 
@@ -98,7 +135,7 @@ TEST(shape_of_gpu, bfzyx) {
 
     topology topology;
     topology.add(input_layout("input", input->get_layout()));
-    topology.add(shape_of("shape_of", input_info("input"), 5, data_types::i32));
+    topology.add(shape_of("shape_of", input_info("input"), data_types::i32));
 
     network network(engine, topology, get_test_default_config(engine));
 
@@ -127,7 +164,7 @@ TEST(shape_of_gpu, dynamic) {
 
     cldnn::topology topology;
     topology.add(input_layout("input", in_layout));
-    topology.add(shape_of("shape_of", input_info("input"), 4, data_types::i32));
+    topology.add(shape_of("shape_of", input_info("input"), data_types::i32));
 
     ExecutionConfig config = get_test_default_config(engine);
     config.set_property(ov::intel_gpu::allow_new_shape_infer(true));
@@ -176,7 +213,7 @@ TEST(shape_of_gpu, shape_infer_optimization_dynamic) {
 
     cldnn::topology topology;
     topology.add(input_layout("input", in_layout));
-    topology.add(shape_of("shape_of", input_info("input"), 4, data_types::i32));
+    topology.add(shape_of("shape_of", input_info("input"), data_types::i32));
 
     ExecutionConfig config = get_test_default_config(engine);
     config.set_property(ov::intel_gpu::allow_new_shape_infer(true));

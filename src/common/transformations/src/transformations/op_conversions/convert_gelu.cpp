@@ -1,14 +1,13 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
+#include "transformations/op_conversions/convert_gelu.hpp"
+
 #include <memory>
-#include <ngraph/ngraph.hpp>
-#include <ngraph/pattern/op/wrap_type.hpp>
-#include <ngraph/rt_info.hpp>
-#include <transformations/op_conversions/convert_gelu.hpp>
 
 #include "itt.hpp"
+#include "openvino/core/rt_info.hpp"
 #include "openvino/op/add.hpp"
 #include "openvino/op/constant.hpp"
 #include "openvino/op/divide.hpp"
@@ -16,13 +15,14 @@
 #include "openvino/op/gelu.hpp"
 #include "openvino/op/multiply.hpp"
 #include "openvino/op/sqrt.hpp"
+#include "openvino/pass/pattern/op/wrap_type.hpp"
 
 ov::pass::ConvertGELU::ConvertGELU() {
     MATCHER_SCOPE(ConvertGELU);
     auto gelu = pattern::wrap_type<ov::op::v0::Gelu>();
 
     matcher_pass_callback callback = [this](pattern::Matcher& m) {
-        auto gelu = std::dynamic_pointer_cast<ov::op::v0::Gelu>(m.get_match_root());
+        auto gelu = ov::as_type_ptr<ov::op::v0::Gelu>(m.get_match_root());
         if (!gelu || transformation_callback(gelu))
             return false;
         auto input = gelu->input_value(0);
@@ -38,11 +38,11 @@ ov::pass::ConvertGELU::ConvertGELU() {
         auto res = std::make_shared<ov::op::v1::Multiply>(mul, add);
 
         res->set_friendly_name(gelu->get_friendly_name());
-        ngraph::copy_runtime_info(gelu, {mul, sq2, div, erf, add, res});
-        ngraph::replace_node(gelu, res);
+        ov::copy_runtime_info(gelu, {mul, sq2, div, erf, add, res});
+        ov::replace_node(gelu, res);
         return true;
     };
 
-    auto m = std::make_shared<ngraph::pattern::Matcher>(gelu, matcher_name);
+    auto m = std::make_shared<ov::pass::pattern::Matcher>(gelu, matcher_name);
     register_matcher(m, callback, PassProperty::CHANGE_DYNAMIC_STATE);
 }

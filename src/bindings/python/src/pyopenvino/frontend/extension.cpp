@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -25,6 +25,33 @@ void regclass_frontend_TelemetryExtension(py::module m) {
     py::class_<TelemetryExtension, std::shared_ptr<TelemetryExtension>, ov::Extension> ext(m,
                                                                                            "TelemetryExtension",
                                                                                            py::dynamic_attr());
+
+    ext.def(py::init([](const std::string& event_category,
+                        py::function& send_event,
+                        py::function& send_error,
+                        py::function& send_stack_trace) {
+        auto send_event_sp = Common::utils::wrap_pyfunction(send_event);
+        auto send_error_sp = Common::utils::wrap_pyfunction(send_error);
+        auto send_stack_trace_sp = Common::utils::wrap_pyfunction(send_stack_trace);
+
+        return std::make_shared<TelemetryExtension>(
+            event_category,
+            [send_event_sp](const std::string& category,
+                            const std::string& action,
+                            const std::string& label,
+                            int value) {
+                py::gil_scoped_acquire acquire;
+                (*send_event_sp)(category, action, label, value);
+            },
+            [send_error_sp](const std::string& category, const std::string& error_message) {
+                py::gil_scoped_acquire acquire;
+                (*send_error_sp)(category, error_message);
+            },
+            [send_stack_trace_sp](const std::string& category, const std::string& error_message) {
+                py::gil_scoped_acquire acquire;
+                (*send_stack_trace_sp)(category, error_message);
+            });
+    }));
 
     ext.def(py::init([](const std::string& event_category,
                         const TelemetryExtension::event_callback& send_event,
@@ -96,6 +123,13 @@ void regclass_frontend_ProgressReporterExtension(py::module m) {
         return std::make_shared<ProgressReporterExtension>();
     }));
 
+    ext.def(py::init([](py::function& callback) {
+        return std::make_shared<ProgressReporterExtension>([callback](float a, unsigned int b, unsigned int c) {
+            py::gil_scoped_acquire acquire;
+            callback(a, b, c);
+        });
+    }));
+
     ext.def(py::init([](const ProgressReporterExtension::progress_notifier_callback& callback) {
         return std::make_shared<ProgressReporterExtension>(callback);
     }));
@@ -108,9 +142,9 @@ void regclass_frontend_ProgressReporterExtension(py::module m) {
 }
 
 void regclass_frontend_OpExtension(py::module m) {
-    py::class_<OpExtension<void>, std::shared_ptr<OpExtension<void>>, ConversionExtension> ext(m,
-                                                                                               "OpExtension",
-                                                                                               py::dynamic_attr());
+    py::module frontend = m.def_submodule("frontend");
+    py::class_<ov::frontend::OpExtension<void>, std::shared_ptr<ov::frontend::OpExtension<void>>, ConversionExtension>
+        ext(frontend, "OpExtension", py::dynamic_attr());
 
     ext.def(py::init([](const std::string& fw_type_name,
                         const std::map<std::string, std::string>& attr_names_map,

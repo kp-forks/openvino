@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -34,10 +34,10 @@ struct OutputTranspose {
 OutputTranspose GetOutputTransposes(const NodePtr& node) {
     for (size_t output_idx = 0; output_idx < node->get_output_size(); ++output_idx) {
         for (auto& input : node->get_output_target_inputs(output_idx)) {
-            auto transpose_node = dynamic_cast<ov::op::v1::Transpose*>(input.get_node());
+            auto transpose_node = ov::as_type<ov::op::v1::Transpose>(input.get_node());
             if (!transpose_node)
                 continue;
-            auto constant_node = dynamic_cast<ov::op::v0::Constant*>(transpose_node->input_value(1).get_node());
+            auto constant_node = ov::as_type<ov::op::v0::Constant>(transpose_node->input_value(1).get_node());
             if (!constant_node)
                 continue;
             {
@@ -95,6 +95,40 @@ bool GetSplitAxis(const std::shared_ptr<ov::op::v0::Constant>& split_axis, const
 }
 }  // namespace
 
+TSSplitForward::TSSplitForward() {
+    MATCHER_SCOPE(TSSplitForward);
+
+    create_pattern<ov::op::v1::Split, ov::op::v1::VariadicSplit>({0});
+
+    auto sinking_transformation = [OV_CAPTURE_CPY_AND_THIS](const std::shared_ptr<Node>& main_node,
+                                                            const TransposeInputsInfo& transpose_info) -> bool {
+        auto split_axis_constant = as_type_ptr<ov::op::v0::Constant>(main_node->input_value(1).get_node_shared_ptr());
+        if (!split_axis_constant) {
+            return false;
+        }
+
+        int64_t split_axis;
+        if (!GetSplitAxis(split_axis_constant, main_node->input_value(0).get_partial_shape().rank(), split_axis)) {
+            return false;
+        }
+
+        sink_forward::RemoveInputNode(main_node, /* input_idx */ 0);
+        const auto transpose_axis_order = transpose_info.transpose_const->get_axis_vector_val();
+        const size_t transposed_split_axis = transpose_axis_order[split_axis];
+        auto new_split_axis_const = std::make_shared<ov::op::v0::Constant>(split_axis_constant->get_element_type(),
+                                                                           Shape{},
+                                                                           transposed_split_axis);
+        main_node->input(1).replace_source_output(new_split_axis_const);
+        copy_runtime_info({split_axis_constant, transpose_info.transpose, transpose_info.transpose_const},
+                          new_split_axis_const);
+
+        default_outputs_update(main_node, transpose_info);
+        return true;
+    };
+
+    transpose_sinking(matcher_name, sinking_transformation);
+}
+
 /*
  * We follow Transpose operations rather than Split. We cannot create matcher pattern
  * for Split with Transpose outputs since Split can have different number of outputs.
@@ -127,7 +161,7 @@ TSSplitBackward::TSSplitBackward() {
     auto transpose_const_label = wrap_type<ov::op::v0::Constant>();
     auto transpose_label = wrap_type<ov::op::v1::Transpose>({any_input(), transpose_const_label}, IsSplitSinked);
 
-    matcher_pass_callback matcher_pass_callback = [=](Matcher& m) {
+    matcher_pass_callback matcher_pass_callback = [OV_CAPTURE_CPY_AND_THIS](Matcher& m) {
         const auto& pattern_to_output = m.get_pattern_value_map();
         auto transpose_label_node = pattern_to_output.at(transpose_label).get_node();
 
@@ -189,53 +223,5 @@ TSSplitBackward::TSSplitBackward() {
     };
 
     auto m = std::make_shared<Matcher>(transpose_label, matcher_name);
-    register_matcher(m, matcher_pass_callback);
-}
-
-TSSplitForward::TSSplitForward() {
-    MATCHER_SCOPE(TSSplitForward);
-
-    auto main_node_label = wrap_type<ov::op::v1::Split, ov::op::v1::VariadicSplit>(IfNodeHasTransposeInputs);
-
-    matcher_pass_callback matcher_pass_callback = [=](Matcher& m) {
-        const auto& pattern_to_output = m.get_pattern_value_map();
-
-        auto& main_node_output = pattern_to_output.at(main_node_label);
-        auto main_node = main_node_output.get_node_shared_ptr();
-        if (transformation_callback(main_node)) {
-            return false;
-        }
-
-        auto split_axis_constant = as_type_ptr<ov::op::v0::Constant>(main_node->input_value(1).get_node_shared_ptr());
-        if (!split_axis_constant) {
-            return false;
-        }
-
-        int64_t split_axis;
-        if (!GetSplitAxis(split_axis_constant, main_node->input_value(0).get_partial_shape().rank(), split_axis)) {
-            return false;
-        }
-        TransposeInputsInfo transpose_input_info = GetFirstTransposeInput(main_node);
-
-        sink_forward::RemoveInputNode(main_node, /* input_idx */ 0);
-        const auto transpose_axis_order = transpose_input_info.transpose_const->get_axis_vector_val();
-        const size_t transposed_split_axis = transpose_axis_order[split_axis];
-        auto new_split_axis_const = std::make_shared<ov::op::v0::Constant>(split_axis_constant->get_element_type(),
-                                                                           Shape{},
-                                                                           transposed_split_axis);
-        main_node->input(1).replace_source_output(new_split_axis_const);
-        copy_runtime_info({split_axis_constant, transpose_input_info.transpose, transpose_input_info.transpose_const},
-                          new_split_axis_const);
-        main_node->validate_and_infer_types();
-
-        for (auto& new_node : sink_forward::InsertOutputTransposes(main_node, transpose_input_info)) {
-            register_new_node(new_node);
-            UpdateForwardSinkingAbility(new_node);
-        }
-
-        return true;
-    };
-
-    auto m = std::make_shared<Matcher>(main_node_label, matcher_name);
     register_matcher(m, matcher_pass_callback);
 }

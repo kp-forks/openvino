@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -13,8 +13,10 @@ namespace ov {
 namespace frontend {
 namespace paddle {
 
-class PADDLE_API ConversionExtension : public ConversionExtensionBase {
+class ConversionExtension : public ConversionExtensionBase {
 public:
+    OPENVINO_RTTI("frontend::paddle::ConversionExtension", "", ConversionExtensionBase);
+
     using Ptr = std::shared_ptr<ConversionExtension>;
 
     ConversionExtension() = delete;
