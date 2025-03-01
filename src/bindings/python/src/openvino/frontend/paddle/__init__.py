@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2021 Intel Corporation
+# Copyright (C) 2018-2025 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -7,11 +7,6 @@ Low level wrappers for the FrontEnd C++ API.
 """
 
 # flake8: noqa
-
-from openvino.utils import _add_openvino_libs_to_search_path
-
-_add_openvino_libs_to_search_path()
-
 
 try:
     from openvino.frontend.paddle.py_paddle_frontend import ConversionExtensionPaddle as ConversionExtension

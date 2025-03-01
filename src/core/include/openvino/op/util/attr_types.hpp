@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -19,6 +19,12 @@ enum class PadMode { CONSTANT = 0, EDGE, REFLECT, SYMMETRIC };
 
 OPENVINO_API
 std::ostream& operator<<(std::ostream& s, const PadMode& type);
+
+/// \brief Fill modes to set default value for operators like `SegmentMax`.
+enum class FillMode { ZERO = 0, LOWEST };
+
+OPENVINO_API
+std::ostream& operator<<(std::ostream& s, const FillMode& type);
 
 /// \brief Padding Type used for `Convolution` and `Pooling`
 ///
@@ -50,6 +56,7 @@ std::ostream& operator<<(std::ostream& s, const PadType& type);
 enum class RoundingType {
     FLOOR = 0,
     CEIL = 1,
+    CEIL_TORCH = 2,
 };
 
 OPENVINO_API
@@ -153,10 +160,18 @@ enum class TopKMode {
 OPENVINO_API
 std::ostream& operator<<(std::ostream& s, const TopKMode& type);
 
+enum class PhiloxAlignment { TENSORFLOW, PYTORCH, MOCK };
+
+OPENVINO_API
+std::ostream& operator<<(std::ostream& s, const PhiloxAlignment& alignment);
+
 /// \brief Implicit broadcast specification
 struct OPENVINO_API AutoBroadcastSpec {
     AutoBroadcastSpec() : m_type(AutoBroadcastType::NONE), m_axis(0) {}
-    AutoBroadcastSpec(AutoBroadcastType type) : m_type(type), m_axis(0) {}
+    AutoBroadcastSpec(AutoBroadcastType type) {
+        m_type = type;
+        m_axis = (m_type == AutoBroadcastType::PDPD) ? -1 : 0;
+    }
     AutoBroadcastSpec(const char* type) : AutoBroadcastSpec(type_from_string(type)) {}
     AutoBroadcastSpec(AutoBroadcastType type, int64_t axis) : m_type(type), m_axis(axis) {}
 
@@ -178,7 +193,10 @@ private:
 /// \brief Implicit broadcast specification
 struct OPENVINO_API BroadcastModeSpec {
     BroadcastModeSpec() : m_type(BroadcastType::NUMPY), m_axis(0) {}
-    BroadcastModeSpec(BroadcastType type) : m_type(type), m_axis(0) {}
+    BroadcastModeSpec(BroadcastType type) {
+        m_type = type;
+        m_axis = (m_type == BroadcastType::PDPD) ? -1 : 0;
+    }
     BroadcastModeSpec(const char* type) : BroadcastModeSpec(as_enum<BroadcastType>(type)) {}
     BroadcastModeSpec(BroadcastType type, int64_t axis) : m_type(type), m_axis(axis) {}
 
@@ -205,6 +223,14 @@ public:
     AttributeAdapter(op::PadMode& value) : EnumAttributeAdapterBase<op::PadMode>(value) {}
 
     OPENVINO_RTTI("AttributeAdapter<PadMode>");
+};
+
+template <>
+class OPENVINO_API AttributeAdapter<op::FillMode> : public EnumAttributeAdapterBase<op::FillMode> {
+public:
+    AttributeAdapter(op::FillMode& value) : EnumAttributeAdapterBase<op::FillMode>(value) {}
+
+    OPENVINO_RTTI("AttributeAdapter<FillMode>");
 };
 
 template <>
@@ -261,6 +287,14 @@ public:
     AttributeAdapter(op::TopKMode& value) : EnumAttributeAdapterBase<op::TopKMode>(value) {}
 
     OPENVINO_RTTI("AttributeAdapter<TopKMode>");
+};
+
+template <>
+class OPENVINO_API AttributeAdapter<op::PhiloxAlignment> : public EnumAttributeAdapterBase<op::PhiloxAlignment> {
+public:
+    AttributeAdapter(op::PhiloxAlignment& value) : EnumAttributeAdapterBase<op::PhiloxAlignment>(value) {}
+
+    OPENVINO_RTTI("AttributeAdapter<PhiloxAlignment>");
 };
 
 template <>

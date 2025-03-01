@@ -1,14 +1,14 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #include <gtest/gtest.h>
 
-#include "common_test_utils/ngraph_test_utils.hpp"
+#include "common_test_utils/ov_test_utils.hpp"
 #include "openvino/opsets/opset10.hpp"
 #include "openvino/opsets/opset2.hpp"
 #include "openvino/pass/manager.hpp"
-#include "transformations/common_optimizations/mark_subgraphs_to_keep_in_mixed_precision.hpp"
+#include "transformations/fp16_compression/mark_subgraphs_to_keep_in_mixed_precision.hpp"
 #include "transformations/rt_info/disable_fp16_compression.hpp"
 
 using namespace testing;
@@ -453,6 +453,49 @@ TEST(TransformationTests, DivisionByZeroMinimalPattern) {
     ASSERT_TRUE(result.valid) << result.message;
 }
 
+TEST(TransformationTests, DivisionByZeroEpsWithConvert) {
+    shared_ptr<Model> model, model_ref;
+    pass::Manager manager;
+
+    const float eps_value = 1.0e-5f;
+    {
+        auto input_1 = std::make_shared<Parameter>(element::f32, PartialShape::dynamic(3));
+        auto input_2 = std::make_shared<Parameter>(element::f32, PartialShape::dynamic(3));
+        auto eps_const = Constant::create(element::f16, Shape{1}, {eps_value});
+        auto convert_eps = std::make_shared<Convert>(eps_const, element::f32);
+
+        auto add = std::make_shared<Add>(input_2, convert_eps);
+        auto divide = std::make_shared<Divide>(input_1, add);
+        model = std::make_shared<Model>(NodeVector{divide}, ParameterVector{input_1, input_2});
+
+        manager.register_pass<pass::MarkSugraphsToKeepInMixedPrecision>();
+        manager.run_passes(model);
+    }
+
+    {
+        auto input_1 = std::make_shared<Parameter>(element::f32, PartialShape::dynamic(3));
+        auto input_2 = std::make_shared<Parameter>(element::f32, PartialShape::dynamic(3));
+        auto eps_const = Constant::create(element::f16, Shape{1}, {eps_value});
+        auto convert_eps = std::make_shared<Convert>(eps_const, element::f32);
+        auto add = std::make_shared<Add>(input_2, convert_eps);
+        auto divide = std::make_shared<Divide>(input_1, add);
+        disable_fp16_compression(divide);
+        disable_fp16_compression(eps_const);
+        disable_fp16_compression(convert_eps);
+        disable_fp16_compression(add);
+
+        model_ref = std::make_shared<Model>(NodeVector{divide}, ParameterVector{input_1, input_2});
+    }
+
+    const FunctionsComparator func_comparator =
+        FunctionsComparator::with_default().enable(FunctionsComparator::RUNTIME_KEYS);
+    // need to compare twice to ensure that no extra nodes are marked
+    FunctionsComparator::Result result = func_comparator(model_ref, model);
+    ASSERT_TRUE(result.valid) << result.message;
+    result = func_comparator(model, model_ref);
+    ASSERT_TRUE(result.valid) << result.message;
+}
+
 TEST(TransformationTests, PowWithNegativeExponent) {
     shared_ptr<Model> model, model_ref;
     pass::Manager manager;
@@ -591,6 +634,61 @@ TEST(TransformationTests, DivisionByZeroInL2NormWithSqrtAndWithMax) {
         disable_fp16_compression(reduce_sum);
         disable_fp16_compression(max);
         disable_fp16_compression(eps_const);
+        disable_fp16_compression(sqrt);
+        disable_fp16_compression(divide);
+
+        model_ref = std::make_shared<Model>(NodeVector{divide}, ParameterVector{input});
+    }
+    const FunctionsComparator func_comparator =
+        FunctionsComparator::with_default().enable(FunctionsComparator::RUNTIME_KEYS);
+    // need to compare twice to ensure that no extra nodes are marked
+    FunctionsComparator::Result result = func_comparator(model_ref, model);
+    ASSERT_TRUE(result.valid) << result.message;
+    result = func_comparator(model, model_ref);
+    ASSERT_TRUE(result.valid) << result.message;
+}
+
+TEST(TransformationTests, DivisionByZeroMaxAndEpsWithConvert) {
+    shared_ptr<Model> model, model_ref;
+    pass::Manager manager;
+    const float eps_value = 1.0e-5f;
+    {
+        auto input = std::make_shared<Parameter>(element::f32, PartialShape::dynamic(3));
+        auto exp = Constant::create(element::f32, Shape{}, {2.f});
+        auto pow = std::make_shared<Power>(input, exp);
+        auto axes_const = Constant::create(element::i64, Shape{2}, {0, 1});
+        auto reduce_sum = std::make_shared<ReduceSum>(pow, axes_const);
+        auto eps_const = Constant::create(element::f16, Shape{}, {eps_value});
+        auto convert_eps = std::make_shared<Convert>(eps_const, element::f32);
+        auto max = std::make_shared<Maximum>(reduce_sum, convert_eps);
+        auto sqrt = std::make_shared<Sqrt>(max);
+        auto divide = std::make_shared<Divide>(input, sqrt);
+
+        model = std::make_shared<Model>(NodeVector{divide}, ParameterVector{input});
+
+        manager.register_pass<pass::MarkSugraphsToKeepInMixedPrecision>();
+        manager.run_passes(model);
+    }
+
+    {
+        auto input = std::make_shared<Parameter>(element::f32, PartialShape::dynamic(3));
+        auto exp = Constant::create(element::f32, Shape{}, {2.f});
+        auto pow = std::make_shared<Power>(input, exp);
+        auto axes_const = Constant::create(element::i64, Shape{2}, {0, 1});
+        auto reduce_sum = std::make_shared<ReduceSum>(pow, axes_const);
+        auto eps_const = Constant::create(element::f16, Shape{}, {eps_value});
+        auto convert_eps = std::make_shared<Convert>(eps_const, element::f32);
+        auto max = std::make_shared<Maximum>(reduce_sum, convert_eps);
+        auto sqrt = std::make_shared<Sqrt>(max);
+        auto divide = std::make_shared<Divide>(input, sqrt);
+
+        // marking nodes to be kept in fp32 for mixed precision
+        disable_fp16_compression(exp);
+        disable_fp16_compression(pow);
+        disable_fp16_compression(reduce_sum);
+        disable_fp16_compression(max);
+        disable_fp16_compression(eps_const);
+        disable_fp16_compression(convert_eps);
         disable_fp16_compression(sqrt);
         disable_fp16_compression(divide);
 
@@ -986,6 +1084,78 @@ TEST(TransformationTests, MarkDivWithEpsToKeepInMixedPrecision_MinimalPatternUnc
     FunctionsComparator::Result result = fc(model_ref, model);
     ASSERT_TRUE(result.valid) << result.message;
     result = fc(model, model_ref);
+    ASSERT_TRUE(result.valid) << result.message;
+}
+
+TEST(TransformationTests, MarkFloatingPointRange) {
+    shared_ptr<Model> model, model_ref;
+    pass::Manager manager;
+    {
+        auto begin = Constant::create(element::i64, Shape{}, {0});
+        auto step = Constant::create(element::i64, Shape{}, {1});
+
+        auto end = make_shared<Parameter>(element::i64, Shape{});
+
+        auto range_1 = make_shared<op::v4::Range>(begin, end, step, element::f32);
+        auto range_2 = make_shared<op::v4::Range>(begin, end, step, element::f32);
+
+        auto convert_1 = make_shared<Convert>(range_1, element::i64);
+        auto convert_2 = make_shared<Convert>(convert_1, element::f32);
+
+        auto unsqueeze_const = Constant::create(element::i64, Shape{2}, {-1, 1});
+        auto unsqueeze = make_shared<Unsqueeze>(range_2, unsqueeze_const);
+
+        auto greater = make_shared<Greater>(convert_2, unsqueeze);
+        auto convert = make_shared<Convert>(greater, element::f32);
+
+        auto multiply_const = Constant::create(element::f32, Shape{}, {1.f});
+        auto multiply = make_shared<Multiply>(convert, multiply_const);
+
+        model = make_shared<Model>(NodeVector{convert}, ParameterVector{end});
+
+        manager.register_pass<pass::MarkSugraphsToKeepInMixedPrecision>();
+        manager.run_passes(model);
+    }
+
+    {
+        auto begin = Constant::create(element::i64, Shape{}, {0});
+        auto step = Constant::create(element::i64, Shape{}, {1});
+
+        auto end = make_shared<Parameter>(element::i64, Shape{});
+
+        auto range_1 = make_shared<op::v4::Range>(begin, end, step, element::f32);
+        auto range_2 = make_shared<op::v4::Range>(begin, end, step, element::f32);
+
+        auto convert_1 = make_shared<Convert>(range_1, element::i64);
+        auto convert_2 = make_shared<Convert>(convert_1, element::f32);
+
+        auto unsqueeze_const = Constant::create(element::i64, Shape{2}, {-1, 1});
+        auto unsqueeze = make_shared<Unsqueeze>(range_2, unsqueeze_const);
+
+        auto greater = make_shared<Greater>(convert_2, unsqueeze);
+        auto convert = make_shared<Convert>(greater, element::f32);
+
+        auto multiply_const = Constant::create(element::f32, Shape{}, {1.f});
+        auto multiply = make_shared<Multiply>(convert, multiply_const);
+
+        // marking nodes to be kept in fp32 for mixed precision
+        disable_fp16_compression(range_1);
+        disable_fp16_compression(range_2);
+        disable_fp16_compression(convert_1);
+        disable_fp16_compression(convert_2);
+        disable_fp16_compression(unsqueeze);
+        disable_fp16_compression(greater);
+        disable_fp16_compression(convert);
+
+        model_ref = make_shared<Model>(NodeVector{convert}, ParameterVector{end});
+    }
+
+    const FunctionsComparator func_comparator =
+        FunctionsComparator::with_default().enable(FunctionsComparator::RUNTIME_KEYS);
+    // need to compare twice to ensure that no extra nodes are marked
+    FunctionsComparator::Result result = func_comparator(model_ref, model);
+    ASSERT_TRUE(result.valid) << result.message;
+    result = func_comparator(model, model_ref);
     ASSERT_TRUE(result.valid) << result.message;
 }
 

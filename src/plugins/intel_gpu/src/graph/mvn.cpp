@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -15,7 +15,7 @@ layout mvn_inst::calc_output_layout(mvn_node const& node, kernel_impl_params con
     auto output_type = impl_param.desc->output_data_types[0].value_or(input_node_layout.data_type);
 
     if (impl_param.has_fused_primitives()) {
-        output_type = impl_param.get_fused_output_layout().data_type;
+        output_type = impl_param.get_output_element_type();
     } else if (input_node_layout.data_type == data_types::u8 || input_node_layout.data_type == data_types::i8) {
         output_type = data_types::f32;
     }
@@ -37,7 +37,7 @@ std::string mvn_inst::to_string(mvn_node const& node) {
     json_composite mvn_info;
     mvn_info.add("input id", input.id());
     mvn_info.add("epsilon", epsilon);
-    mvn_info.add("reduction axes", axes);
+    mvn_info.add("reduction axes", std::move(axes));
     mvn_info.add("normalize_variance region", normalize_variance);
     mvn_info.add("eps_inside_sqrt region", eps_inside_sqrt);
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -104,7 +104,7 @@ std::string toCodeString(double val);
 std::string toCodeString(size_t val);
 std::string toCodeString(uint8_t val);
 std::string toCodeString(int8_t val);
-std::string toCodeString(const Tensor::Dim& dim, size_t offset, bool padded = false);
+std::string toCodeString(const Tensor::Dim& dim, size_t offset, bool padded = false, bool pad_is_dynamic = false, size_t dynamic_pad_offset = 0);
 std::string toShapeInfoString(size_t arg_idx, size_t data_idx_at_6d, bool is_output = false, size_t num_of_inputs = 0);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -167,7 +167,7 @@ std::shared_ptr<JitConstant> MakeJitConstant(const std::string& name, T value) {
     return std::static_pointer_cast<JitConstant>(std::make_shared<simple_jit_constant>(name, toCodeString(value)));
 }
 
-std::shared_ptr<JitConstant> MakeJitConstant(const std::string& name, const struct Tensor::DataTensor& value, size_t dyn_tensor_index = 0);
+std::shared_ptr<JitConstant> MakeJitConstant(const std::string& name, const struct Tensor::DataTensor& value);
 std::shared_ptr<JitConstant> MakeJitConstant(const std::string& name, const struct Tensor::WeightsTensor& value);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -310,7 +310,8 @@ JitConstants MakeActivationJitConstants(std::vector<kernel_selector::base_activa
                                         Datatype output_dt,
                                         const std::string& suffix = "",
                                         bool use_type_parameter = false,
-                                        bool disable_type_conversion = false);
+                                        bool disable_type_conversion = false,
+                                        bool convert_input_to_output_dt = false);
 JitConstants MakeBaseParamsJitConstants(const base_params& params);
 JitConstants MakeLoopUnrollParamsJitConstants(uint32_t loopCount);
 
@@ -322,7 +323,7 @@ JitConstants MakeConstantLoopUnrollJitConstants(uint32_t loopCount);
 JitConstants MakeTypeJitConstants(Datatype dataType, const std::string& macroName);
 JitConstants MakeTypeJitConstants(WeightsType weightsType, const std::string& macroName);
 inline JitConstants MakeUnitTypeJitConstants(Datatype dataType) { return MakeTypeJitConstants(dataType, "UNIT"); }
-
+JitConstants make_int4_packed_type_jit_constant(const std::string& macro_name, WeightsType wt, size_t pack_size);
 
 class FusedOpsCodeGenerator {
 public:
@@ -380,7 +381,7 @@ public:
         }
     };
 
-    JitConstants MakeFusedTensorJitConstants(const FusedOpsConfiguration& conf, size_t dynamic_in_out_tensors_count) const;
+    JitConstants MakeFusedTensorJitConstants(const FusedOpsConfiguration& conf) const;
     JitConstants MakeInputDeclsJitConstants(const FusedOpsConfiguration& conf) const;
     JitConstants MakeLoadJitConstants(const FusedOpsConfiguration& conf, const DataTensor prim_output) const;
     JitConstants MakeOpJitConstants(const FusedOpsConfiguration& conf,

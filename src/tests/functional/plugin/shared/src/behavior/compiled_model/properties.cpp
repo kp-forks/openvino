@@ -3,8 +3,13 @@
 //
 
 #include "behavior/compiled_model/properties.hpp"
-#include "openvino/runtime/properties.hpp"
+
 #include <cstdint>
+
+#include "openvino/runtime/properties.hpp"
+#include "common_test_utils/subgraph_builders/conv_pool_relu.hpp"
+
+#include <locale.h>
 
 namespace ov {
 namespace test {
@@ -70,7 +75,7 @@ void OVCompileModelGetExecutionDeviceTests::SetUp() {
     std::tie(target_device, userConfig) = GetParam();
     compileModelProperties = userConfig.first;
     expectedDeviceName = userConfig.second;
-    model = ngraph::builder::subgraph::makeConvPoolRelu();
+    model = ov::test::utils::make_conv_pool_relu();
 }
 
 TEST_P(OVClassCompiledModelPropertiesTests, CanUseCache) {
@@ -78,7 +83,7 @@ TEST_P(OVClassCompiledModelPropertiesTests, CanUseCache) {
     core->set_property(ov::cache_dir(cache_dir));
     OV_ASSERT_NO_THROW(core->compile_model(model, target_device, properties));
     OV_ASSERT_NO_THROW(core->compile_model(model, target_device, properties));
-    CommonTestUtils::removeDir(cache_dir);
+    ov::test::utils::removeDir(cache_dir);
 }
 
 TEST_P(OVClassCompiledModelPropertiesTests, canCompileModelWithPropertiesAndCheckGetProperty) {
@@ -94,6 +99,16 @@ TEST_P(OVClassCompiledModelPropertiesTests, canCompileModelWithPropertiesAndChec
     }
 }
 
+TEST_P(OVClassCompileModelWithCorrectPropertiesTest, IgnoreEnableMMap) {
+    if (target_device.find("HETERO:") == 0 || target_device.find("MULTI:") == 0 || target_device.find("AUTO:") == 0 ||
+        target_device.find("BATCH:") == 0)
+        GTEST_SKIP() << "Disabled test due to configuration" << std::endl;
+    // Load available plugins
+    core->get_available_devices();
+    OV_ASSERT_NO_THROW(core->set_property(ov::enable_mmap(false)));
+    OV_ASSERT_NO_THROW(core->set_property(target_device, ov::enable_mmap(false)));
+}
+
 TEST_P(OVClassCompileModelWithCorrectPropertiesTest, CompileModelWithCorrectPropertiesTest) {
     OV_ASSERT_NO_THROW(core->compile_model(model, target_device, properties));
 }
@@ -103,8 +118,13 @@ TEST_P(OVClassCompiledModelPropertiesIncorrectTests, CanNotCompileModelWithIncor
 }
 
 TEST_P(OVCompiledModelIncorrectDevice, CanNotCompileModelWithIncorrectDeviceID) {
-    ov::Core ie = createCoreWithTemplate();
+    ov::Core ie = ov::test::utils::create_core();
     ASSERT_THROW(ie.compile_model(actualNetwork, target_device + ".10"), ov::Exception);
+}
+
+TEST_P(OVCompiledModelIncorrectDevice, CanNotCompileModelWithEmpty) {
+    ov::Core ie = ov::test::utils::create_core();
+    ASSERT_THROW(ie.compile_model(actualNetwork, ""), ov::Exception);
 }
 
 TEST_P(OVCompiledModelPropertiesDefaultSupportedTests, CanCompileWithDefaultValueFromPlugin) {
@@ -137,7 +157,8 @@ TEST_P(OVClassCompiledModelPropertiesDefaultTests, CheckDefaultValues) {
         ASSERT_TRUE(supported) << "default_property=" << default_property.first;
         Any property;
         OV_ASSERT_NO_THROW(property = compiled_model.get_property(default_property.first));
-        ASSERT_EQ(default_property.second, property) << "For property: " << default_property.first
+        ASSERT_EQ(default_property.second.as<std::string>(), property.as<std::string>())
+            << "For property: " << default_property.first
             << " expected value is: " << default_property.second.as<std::string>();
     }
 }
@@ -158,7 +179,7 @@ std::string OVClassCompiledModelGetPropertyTest_Priority::getTestCaseName(testin
 
 // get property
 TEST_P(OVClassCompiledModelGetConfigTest, GetConfigNoThrow) {
-    ov::Core ie = createCoreWithTemplate();
+    ov::Core ie = ov::test::utils::create_core();
 
     auto compiled_model = ie.compile_model(simpleNetwork, target_device);
 
@@ -173,7 +194,7 @@ TEST_P(OVClassCompiledModelGetConfigTest, GetConfigNoThrow) {
 }
 
 TEST_P(OVClassCompiledModelGetConfigTest, GetConfigFromCoreAndFromCompiledModel) {
-    ov::Core ie = createCoreWithTemplate();
+    ov::Core ie = ov::test::utils::create_core();
 
     std::vector<ov::PropertyName> dev_property_names;
     OV_ASSERT_NO_THROW(dev_property_names = ie.get_property(target_device, ov::supported_properties));
@@ -186,7 +207,7 @@ TEST_P(OVClassCompiledModelGetConfigTest, GetConfigFromCoreAndFromCompiledModel)
 
 // readonly
 TEST_P(OVClassCompiledModelGetPropertyTest, GetMetricNoThrow_SUPPORTED_CONFIG_KEYS) {
-    ov::Core ie = createCoreWithTemplate();
+    ov::Core ie = ov::test::utils::create_core();
 
     auto compiled_model = ie.compile_model(simpleNetwork, target_device);
 
@@ -216,9 +237,8 @@ TEST_P(OVClassCompiledModelGetPropertyTest, GetMetricNoThrow_SUPPORTED_CONFIG_KE
     ASSERT_EXEC_METRIC_SUPPORTED(ov::supported_properties);
 }
 
-
 TEST_P(OVClassCompiledModelGetPropertyTest, GetMetricNoThrow_NETWORK_NAME) {
-    ov::Core ie = createCoreWithTemplate();
+    ov::Core ie = ov::test::utils::create_core();
 
     auto compiled_model = ie.compile_model(simpleNetwork, target_device);
 
@@ -231,7 +251,7 @@ TEST_P(OVClassCompiledModelGetPropertyTest, GetMetricNoThrow_NETWORK_NAME) {
 }
 
 TEST_P(OVClassCompiledModelGetPropertyTest, GetMetricNoThrow_OPTIMAL_NUMBER_OF_INFER_REQUESTS) {
-    ov::Core ie = createCoreWithTemplate();
+    ov::Core ie = ov::test::utils::create_core();
 
     auto compiled_model = ie.compile_model(simpleNetwork, target_device);
 
@@ -243,15 +263,21 @@ TEST_P(OVClassCompiledModelGetPropertyTest, GetMetricNoThrow_OPTIMAL_NUMBER_OF_I
     ASSERT_EXEC_METRIC_SUPPORTED(ov::optimal_number_of_infer_requests);
 }
 
+TEST_P(OVClassCompiledModelGetPropertyTest, CanCompileModelWithEmptyProperties) {
+    ov::Core core = ov::test::utils::create_core();
+
+    OV_ASSERT_NO_THROW(core.compile_model(simpleNetwork, target_device, ov::AnyMap{}));
+}
+
 TEST_P(OVClassCompiledModelGetIncorrectPropertyTest, GetConfigThrows) {
-    ov::Core ie = createCoreWithTemplate();
+    ov::Core ie = ov::test::utils::create_core();
     auto compiled_model = ie.compile_model(simpleNetwork, target_device);
     ASSERT_THROW(compiled_model.get_property("unsupported_property"), ov::Exception);
 }
 
 // set property
 TEST_P(OVClassCompiledModelSetCorrectConfigTest, canSetConfig) {
-    ov::Core ie = createCoreWithTemplate();
+    ov::Core ie = ov::test::utils::create_core();
     ov::Any param;
 
     auto compiled_model = ie.compile_model(simpleNetwork, target_device);
@@ -262,7 +288,7 @@ TEST_P(OVClassCompiledModelSetCorrectConfigTest, canSetConfig) {
 }
 
 TEST_P(OVClassCompiledModelSetIncorrectConfigTest, canNotSetConfigToCompiledModelWithIncorrectConfig) {
-    ov::Core ie = createCoreWithTemplate();
+    ov::Core ie = ov::test::utils::create_core();
 
     auto compiled_model = ie.compile_model(simpleNetwork, target_device);
     std::map<std::string, std::string> incorrectConfig = {{"abc", "def"}};
@@ -273,10 +299,9 @@ TEST_P(OVClassCompiledModelSetIncorrectConfigTest, canNotSetConfigToCompiledMode
     EXPECT_ANY_THROW(compiled_model.set_property(config));
 }
 
-
 // writeble
 TEST_P(OVClassCompiledModelGetPropertyTest_MODEL_PRIORITY, GetMetricNoThrow) {
-    ov::Core ie = createCoreWithTemplate();
+    ov::Core ie = ov::test::utils::create_core();
     auto compiled_model = ie.compile_model(simpleNetwork, target_device, configuration);
 
     ov::hint::Priority value;
@@ -285,7 +310,7 @@ TEST_P(OVClassCompiledModelGetPropertyTest_MODEL_PRIORITY, GetMetricNoThrow) {
 }
 
 TEST_P(OVClassCompiledModelGetPropertyTest_DEVICE_PRIORITY, GetMetricNoThrow) {
-    ov::Core ie = createCoreWithTemplate();
+    ov::Core ie = ov::test::utils::create_core();
     auto compiled_model = ie.compile_model(simpleNetwork, target_device, configuration);
 
     std::string value;
@@ -294,7 +319,7 @@ TEST_P(OVClassCompiledModelGetPropertyTest_DEVICE_PRIORITY, GetMetricNoThrow) {
 }
 
 TEST_P(OVClassCompiledModelGetPropertyTest_EXEC_DEVICES, CanGetExecutionDeviceInfo) {
-    ov::Core ie = createCoreWithTemplate();
+    ov::Core ie = ov::test::utils::create_core();
     std::vector<std::string> expectedTargets = {expectedDeviceName};
     auto compiled_model = ie.compile_model(model, target_device, compileModelProperties);
 
@@ -310,13 +335,15 @@ TEST_P(OVCompileModelGetExecutionDeviceTests, CanGetExecutionDeviceInfo) {
     std::vector<std::string> expected_devices = util::split(expectedDeviceName, ',');
     std::vector<std::string> updatedExpectDevices;
     updatedExpectDevices.assign(expected_devices.begin(), expected_devices.end());
-    for (auto &iter : compileModelProperties) {
-        if ((iter.first == ov::hint::performance_mode && iter.second.as<ov::hint::PerformanceMode>() == ov::hint::PerformanceMode::CUMULATIVE_THROUGHPUT) ||
+    for (auto& iter : compileModelProperties) {
+        if ((iter.first == ov::hint::performance_mode &&
+             iter.second.as<ov::hint::PerformanceMode>() == ov::hint::PerformanceMode::CUMULATIVE_THROUGHPUT) ||
             ov::test::behavior::sw_plugin_in_target_device(target_device)) {
             for (auto& deviceName : expected_devices) {
                 for (auto&& device : deviceList) {
                     if (device.find(deviceName) != std::string::npos) {
-                        auto updatedExpectDevices_iter = std::find(updatedExpectDevices.begin(), updatedExpectDevices.end(), deviceName);
+                        auto updatedExpectDevices_iter =
+                            std::find(updatedExpectDevices.begin(), updatedExpectDevices.end(), deviceName);
                         if (updatedExpectDevices_iter != updatedExpectDevices.end())
                             updatedExpectDevices.erase(updatedExpectDevices_iter);
                         updatedExpectDevices.push_back(std::move(device));
@@ -336,6 +363,17 @@ TEST_P(OVCompileModelGetExecutionDeviceTests, CanGetExecutionDeviceInfo) {
         ASSERT_EQ(property_vector, updatedExpectDevices);
     else
         ASSERT_FALSE(property.empty());
+}
+
+TEST_P(OVClassCompiledModelGetConfigTest, CanCompileModelWithCustomLocale) {
+    auto prev = std::locale().name();
+    setlocale(LC_ALL, "en_GB.UTF-8");
+
+    ov::Core core = ov::test::utils::create_core();
+
+    OV_ASSERT_NO_THROW(core.compile_model(simpleNetwork, target_device););
+
+    setlocale(LC_ALL, prev.c_str());
 }
 
 }  // namespace behavior

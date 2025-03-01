@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "intel_gpu/runtime/error_handler.hpp"
 #include "pass_manager.h"
 #include "program_helpers.h"
 #include "strided_slice_inst.h"
@@ -17,6 +16,9 @@
 using namespace cldnn;
 
 void prepare_primitive_fusing_through::run(program& p) {
+    GPU_DEBUG_IF(p.get_config().get_disable_post_ops_fusions())
+        return;
+
     auto try_fuse_through = [&](program_node& node) -> std::vector<program_node*> {
         // This function tries to fuse peer_node to first non reorder or reshape previous primitive.
         // It returns chain of primitives (reshapes and reorders) including potential fused_node (e.g. Conv, FC, etc)
@@ -39,7 +41,7 @@ void prepare_primitive_fusing_through::run(program& p) {
                 return false;
 
             if (node->is_type<reorder>() &&
-                node->get_output_layout().data_type != node->get_dependency(0).get_output_layout().data_type)
+                node->get_output_layout().data_type != node->get_input_layout(0).data_type)
                 return false;
 
             // Not to fuse reshape after Reduce changing the order of un-reduced axes. It is expected to be optimized out.
@@ -48,7 +50,7 @@ void prepare_primitive_fusing_through::run(program& p) {
 
             // Not to raise up target node through reshape where the size of dimension is changed (e.g. Unsqueeze)
             if (node->is_type<reshape>() &&
-                node->get_output_layout().get_partial_shape().size() != node->get_dependency(0).get_output_layout().get_partial_shape().size())
+                node->get_output_pshape().size() != node->get_input_pshape(0).size())
                 return false;
 
             return true;
@@ -96,7 +98,7 @@ void prepare_primitive_fusing_through::run(program& p) {
 
             input_node = &node->get_dependency(0);
         } else if (node->is_type<eltwise>()) {
-            if (node->get_dependencies().size() !=2)
+            if (node->get_dependencies().size() != 2)
                 continue;
 
             size_t second_input_idx = 0;
@@ -130,6 +132,14 @@ void prepare_primitive_fusing_through::run(program& p) {
 
         auto new_prev = fuse_through_order[fuse_through_order.size() - 1];
         auto new_next = fuse_through_order[fuse_through_order.size() - 2];
+
+        // Check broadcastable for fused eltwise's output
+        if (node->is_type<eltwise>()) {
+            auto out_shape = new_prev->get_output_layout().get_partial_shape();  // new_prev's layout became node's new layout after fusing
+            auto in_shape = node->get_dependency(1).get_output_layout().get_partial_shape();
+            if (!broadcastable(in_shape, out_shape, true, true))
+                continue;
+        }
 
         if (new_prev->is_type<input_layout>() ||
             new_prev->is_type<mutable_data>() ||

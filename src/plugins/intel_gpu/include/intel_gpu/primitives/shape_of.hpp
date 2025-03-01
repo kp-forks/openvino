@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -12,17 +12,7 @@ namespace cldnn {
 struct shape_of : public primitive_base<shape_of> {
     CLDNN_DECLARE_PRIMITIVE(shape_of)
 
-    /// @brief Constructs shape_of primitive.
-    /// @param id This primitive id.
-    /// @param input Input primitive id.
-    /// @param output_data_type type of output values. can be i32 and i64.
-    shape_of(const primitive_id& id,
-             const input_info& input,
-             size_t output_rank,
-             const data_types output_data_type,
-             const padding& output_padding = padding())
-        : primitive_base(id, {input}, {output_padding}, {optional_data_type{output_data_type}})
-        , output_rank(output_rank) {}
+    shape_of() : primitive_base("", {}) {}
 
     /// @brief Constructs shape_of primitive.
     /// @param id This primitive id.
@@ -30,20 +20,19 @@ struct shape_of : public primitive_base<shape_of> {
     /// @param output_data_type type of output values. can be i32 and i64.
     shape_of(const primitive_id& id,
              const input_info& input,
-             const data_types output_data_type,
-             const padding& output_padding = padding())
-        : primitive_base(id, {input}, {output_padding}, {optional_data_type{output_data_type}})
-        , output_rank(0) {}
-
-    size_t output_rank;
+             const data_types output_data_type)
+        : primitive_base(id, {input}, 1, {optional_data_type{output_data_type}}) {}
 
     bool operator==(const primitive& rhs) const override {
-        if (!compare_common_params(rhs))
-            return false;
+        return compare_common_params(rhs);
+    }
 
-        auto rhs_casted = downcast<const shape_of>(rhs);
+    void save(BinaryOutputBuffer& ob) const override {
+        primitive_base<shape_of>::save(ob);
+    }
 
-        return output_rank == rhs_casted.output_rank;
+    void load(BinaryInputBuffer& ib) override {
+        primitive_base<shape_of>::load(ib);
     }
 };
 }  // namespace cldnn

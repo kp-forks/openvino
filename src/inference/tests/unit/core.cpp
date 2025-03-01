@@ -7,14 +7,15 @@
 #include <gtest/gtest.h>
 
 #include <fstream>
+#include <thread>
 
 #include "common_test_utils/file_utils.hpp"
 #include "common_test_utils/test_assertions.hpp"
 #include "dev/core_impl.hpp"
-#include "file_utils.h"
+#include "openvino/op/relu.hpp"
+#include "openvino/runtime/device_id_parser.hpp"
 #include "openvino/util/file_util.hpp"
 
-using namespace testing;
 using namespace ov::util;
 
 TEST(CoreTests, Throw_on_register_plugin_twice) {
@@ -55,7 +56,7 @@ TEST(CoreTests_get_plugin_path_from_xml, Use_abs_path_as_is) {
 
 TEST(CoreTests_get_plugin_path_from_xml, Convert_relative_path_as_relative_to_xmldir) {
     auto xml_path = "path_to_plugins.xml";
-    auto lib_path = FileUtils::makePath(std::string("."), std::string("test_name.ext"));  // ./test_name.ext
+    auto lib_path = ov::util::make_path(std::string("."), std::string("test_name.ext"));  // ./test_name.ext
     for (auto as_abs_only : std::vector<bool>{true, false}) {
         auto abs_path = from_file_path(get_plugin_path(lib_path, xml_path, as_abs_only));  // XMLDIR/test_name.ext
         EXPECT_TRUE(is_absolute_file_path(abs_path));
@@ -71,7 +72,7 @@ TEST(CoreTests_get_plugin_path_from_xml, Convert_filename_to_abs_path_if_as_abs_
     auto abs_path = from_file_path(get_plugin_path(name, xml_path, true));  // XMLDIR/libtest_name.ext.so
     EXPECT_TRUE(is_absolute_file_path(abs_path));
 
-    auto lib_name = FileUtils::makePluginLibraryName({}, std::string(name));
+    auto lib_name = ov::util::make_plugin_library_name({}, std::string(name));
     auto ref_path = ov::util::get_absolute_file_path(lib_name);
     EXPECT_STREQ(abs_path.c_str(), ref_path.c_str());  // XMLDIR/libtest_name.ext.so == CWD/libtest_name.ext.so
 }
@@ -80,12 +81,12 @@ TEST(CoreTests_get_plugin_path_from_xml, Use_filename_if_not_as_abs_only) {
     auto xml_path = "path_to_plugins.xml";
     auto name = "test_name.ext";                                      // test_name.ext
     auto lib_name = from_file_path(get_plugin_path(name, xml_path));  // libtest_name.ext.so
-    auto ref_name = FileUtils::makePluginLibraryName({}, std::string(name));
+    auto ref_name = ov::util::make_plugin_library_name({}, std::string(name));
     EXPECT_STREQ(lib_name.c_str(), ref_name.c_str());
 }
 
 TEST(CoreTests_get_plugin_path, Use_abs_path_as_is) {
-    auto lib_name = FileUtils::makePluginLibraryName({}, std::string("test_name"));  // libtest_name.so
+    auto lib_name = ov::util::make_plugin_library_name({}, std::string("test_name"));  // libtest_name.so
     auto lib_path = ov::util::get_absolute_file_path(lib_name);
     auto abs_path = from_file_path(get_plugin_path(lib_path));
     EXPECT_TRUE(is_absolute_file_path(abs_path));
@@ -93,7 +94,8 @@ TEST(CoreTests_get_plugin_path, Use_abs_path_as_is) {
 }
 
 TEST(CoreTests_get_plugin_path, Relative_path_is_from_workdir) {
-    auto lib_name = FileUtils::makePluginLibraryName(std::string("."), std::string("test_name"));  // ./libtest_name.so
+    auto lib_name =
+        ov::util::make_plugin_library_name(std::string("."), std::string("test_name"));  // ./libtest_name.so
     auto abs_path = from_file_path(get_plugin_path(lib_name));
     EXPECT_TRUE(is_absolute_file_path(abs_path));
     EXPECT_STREQ(abs_path.c_str(), get_absolute_file_path(lib_name).c_str());
@@ -112,8 +114,8 @@ public:
         std::remove(lib_path.c_str());
     }
 
-    std::string lib_name = FileUtils::makePluginLibraryName({}, std::string("test_name"));  // libtest_name.so
-    std::string lib_path = ov::util::get_absolute_file_path(lib_name);                      // CWD/libtest_name.so
+    std::string lib_name = ov::util::make_plugin_library_name({}, std::string("test_name"));  // libtest_name.so
+    std::string lib_path = ov::util::get_absolute_file_path(lib_name);                        // CWD/libtest_name.so
 };
 
 TEST_F(CoreTests_get_plugin_path_Class, Filename_is_from_workdir_if_exists) {
@@ -127,7 +129,7 @@ TEST(CoreTests_get_plugin_path, Use_filename_as_is_if_not_exist_in_workdir) {
     auto abs_path = from_file_path(get_plugin_path(lib_name));  // libtest_name.ext.so -> libtest_name.ext.so
     EXPECT_FALSE(is_absolute_file_path(abs_path));
 
-    auto ref_path = FileUtils::makePluginLibraryName({}, std::string(lib_name));
+    auto ref_path = ov::util::make_plugin_library_name({}, std::string(lib_name));
     EXPECT_STREQ(abs_path.c_str(), ref_path.c_str());
 }
 
@@ -196,6 +198,50 @@ TEST(CoreTests_check_device_name, is_config_applicable) {
     ASSERT_EQ(ov::is_config_applicable("BATCH", "BATCH:DEVICE"), false);
 }
 
+TEST(CoreTests, check_if_virtual_device) {
+    ASSERT_EQ(ov::is_virtual_device("DEVICE"), false);
+    ASSERT_EQ(ov::is_virtual_device("DEVICE.x"), false);
+    ASSERT_EQ(ov::is_virtual_device("DEVICE.AUTO_DETECT"), false);
+    // AUTO
+    ASSERT_EQ(ov::is_virtual_device("AUTO"), true);
+    ASSERT_EQ(ov::is_virtual_device("AUTO:DEVICE"), true);
+    ASSERT_EQ(ov::is_virtual_device("AUTO:DEVICE,DEVICE"), true);
+    ASSERT_EQ(ov::is_virtual_device("AUTO:DEVICE.x"), true);
+    ASSERT_EQ(ov::is_virtual_device("AUTO:DEVICE.AUTO_DETECT"), true);
+    ASSERT_EQ(ov::is_virtual_device("AUTO:DEVICE.AUTO_DETECT, DEVICE.x"), true);
+    ASSERT_EQ(ov::is_virtual_device("AUTO:DEVICE.HETERO_DETECT, DEVICE.x"), true);
+    ASSERT_EQ(ov::is_virtual_device("AUTO:DEVICE.BATCH_DETECT, DEVICE.x"), true);
+
+    // MULTI
+    ASSERT_EQ(ov::is_virtual_device("MULTI"), true);
+    ASSERT_EQ(ov::is_virtual_device("MULTI:DEVICE"), true);
+    ASSERT_EQ(ov::is_virtual_device("MULTI:DEVICE,DEVICE"), true);
+    ASSERT_EQ(ov::is_virtual_device("MULTI:DEVICE.x"), true);
+    ASSERT_EQ(ov::is_virtual_device("MULTI:DEVICE.AUTO_DETECT"), true);
+    ASSERT_EQ(ov::is_virtual_device("MULTI:DEVICE.MULTI_DETECT, DEVICE.x"), true);
+    ASSERT_EQ(ov::is_virtual_device("MULTI:DEVICE.HETERO_DETECT, DEVICE.x"), true);
+    ASSERT_EQ(ov::is_virtual_device("MULTI:DEVICE.BATCH_DETECT, DEVICE.x"), true);
+
+    // HETERO
+    ASSERT_EQ(ov::is_virtual_device("HETERO"), true);
+    ASSERT_EQ(ov::is_virtual_device("HETERO:DEVICE"), true);
+    ASSERT_EQ(ov::is_virtual_device("HETERO:DEVICE,DEVICE"), true);
+    ASSERT_EQ(ov::is_virtual_device("HETERO:DEVICE.x"), true);
+    ASSERT_EQ(ov::is_virtual_device("HETERO:DEVICE.AUTO_DETECT"), true);
+    ASSERT_EQ(ov::is_virtual_device("HETERO:DEVICE.MULTI_DETECT, DEVICE.x"), true);
+    ASSERT_EQ(ov::is_virtual_device("HETERO:DEVICE.HETERO_DETECT, DEVICE.x"), true);
+    ASSERT_EQ(ov::is_virtual_device("HETERO:DEVICE.BATCH_DETECT, DEVICE.x"), true);
+
+    // BATCH
+    ASSERT_EQ(ov::is_virtual_device("BATCH"), true);
+    ASSERT_EQ(ov::is_virtual_device("BATCH:DEVICE"), true);
+    ASSERT_EQ(ov::is_virtual_device("BATCH:DEVICE.x"), true);
+    ASSERT_EQ(ov::is_virtual_device("BATCH:DEVICE.AUTO_DETECT"), true);
+    ASSERT_EQ(ov::is_virtual_device("BATCH:DEVICE.MULTI_DETECT"), true);
+    ASSERT_EQ(ov::is_virtual_device("BATCH:DEVICE.HETERO_DETECT"), true);
+    ASSERT_EQ(ov::is_virtual_device("BATCH:DEVICE.BATCH_DETECT"), true);
+}
+
 TEST(CoreTests_parse_device_config, get_device_config) {
     auto check_parsed_config = [&](const std::string& device,
                                    const ov::AnyMap& config,
@@ -260,8 +306,7 @@ TEST(CoreTests_parse_device_config, get_device_config) {
                         ov::AnyMap{ov::device::id("0.1"), ov::log::level(ov::log::Level::INFO)});
 
     // device ID mismatch
-    EXPECT_THROW(ov::parseDeviceNameIntoConfig("DEVICE.X", ov::AnyMap{ov::device::id("Y")}),
-                 InferenceEngine::Exception);
+    EXPECT_THROW(ov::parseDeviceNameIntoConfig("DEVICE.X", ov::AnyMap{ov::device::id("Y")}), ov::Exception);
 
     // HETERO
     check_parsed_config("HETERO:DEVICE", ov::AnyMap{}, "HETERO", ov::AnyMap{ov::device::priorities("DEVICE")});
@@ -298,7 +343,7 @@ TEST(CoreTests_parse_device_config, get_device_config) {
                    ov::device::properties(ov::AnyMap{{"DEVICE", ov::AnyMap{ov::log::level(ov::log::Level::ERR)}}})});
     // device priorities mismatch
     EXPECT_THROW(ov::parseDeviceNameIntoConfig("HETERO:DEVICE", ov::AnyMap{ov::device::priorities("ANOTHER_DEVICE")}),
-                 InferenceEngine::Exception);
+                 ov::Exception);
 
     // MULTI
     check_parsed_config("MULTI:DEVICE", ov::AnyMap{}, "MULTI", ov::AnyMap{ov::device::priorities("DEVICE")});
@@ -380,4 +425,63 @@ TEST(CoreTests_parse_device_config, get_device_config) {
         "HETERO",
         ov::AnyMap{ov::device::priorities("MULTI,DEVICE"),
                    ov::device::properties(ov::AnyMap{{"MULTI", ov::AnyMap{ov::device::priorities("DEVICE")}}})});
+
+    // invalid device name with characters after parenthesis except comma
+    EXPECT_THROW(ov::parseDeviceNameIntoConfig("DEVICE(0)ov", ov::AnyMap{}), ov::Exception);
+    EXPECT_THROW(ov::parseDeviceNameIntoConfig("MULTI:DEVICE(0)ov,DEVICE(1)", ov::AnyMap{}), ov::Exception);
+    EXPECT_THROW(ov::parseDeviceNameIntoConfig("MULTI:DEVICE(0),DEVICE(1),", ov::AnyMap{}), ov::Exception);
+}
+
+TEST(CoreTests_parse_device_config, get_batch_device_name) {
+    EXPECT_STREQ(ov::DeviceIDParser::get_batch_device("CPU").c_str(), "CPU");
+    EXPECT_STREQ(ov::DeviceIDParser::get_batch_device("GPU(4)").c_str(), "GPU");
+
+    OV_EXPECT_THROW(ov::DeviceIDParser::get_batch_device("-CPU"),
+                    ov::Exception,
+                    ::testing::HasSubstr("Invalid device name '-CPU' for BATCH"));
+    OV_EXPECT_THROW(ov::DeviceIDParser::get_batch_device("CPU(0)-"),
+                    ov::Exception,
+                    ::testing::HasSubstr("Invalid device name 'CPU(0)-' for BATCH"));
+    OV_EXPECT_THROW(ov::DeviceIDParser::get_batch_device("GPU(4),CPU"),
+                    ov::Exception,
+                    ::testing::HasSubstr("BATCH accepts only one device in list but got 'GPU(4),CPU'"));
+    OV_EXPECT_THROW(ov::DeviceIDParser::get_batch_device("CPU,GPU"),
+                    ov::Exception,
+                    ::testing::HasSubstr("BATCH accepts only one device in list but got 'CPU,GPU'"));
+}
+
+class ApplyAutoBatchThreading : public testing::Test {
+public:
+    static void runParallel(std::function<void(void)> func,
+                            const unsigned int iterations = 50,
+                            const unsigned int threadsNum = 24) {
+        std::vector<std::thread> threads(threadsNum);
+        for (auto& thread : threads) {
+            thread = std::thread([&]() {
+                for (unsigned int i = 0; i < iterations; ++i) {
+                    func();
+                }
+            });
+        }
+        for (auto& thread : threads) {
+            if (thread.joinable())
+                thread.join();
+        }
+    }
+};
+
+// Tested function: apply_auto_batch
+TEST_F(ApplyAutoBatchThreading, ApplyAutoBatch) {
+    ov::CoreImpl core;
+    auto input = std::make_shared<ov::op::v0::Parameter>(ov::element::f32, ov::PartialShape{1, 2, 3, 4});
+    ov::Output<ov::Node> intermediate = input->output(0);
+    for (size_t i = 0; i < 100; ++i)
+        intermediate = std::make_shared<ov::op::v0::Relu>(input)->output(0);
+    auto output = std::make_shared<ov::op::v0::Result>(intermediate);
+    auto model = std::make_shared<ov::Model>(ov::ResultVector{output}, ov::ParameterVector{input});
+    std::string device = "GPU";
+    ov::AnyMap config;
+    runParallel([&]() {
+        core.apply_auto_batching(model, device, config);
+    });
 }

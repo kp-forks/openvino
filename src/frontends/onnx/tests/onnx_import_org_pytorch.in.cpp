@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -14,26 +14,20 @@
 // clang-format on
 
 #include "common_test_utils/file_utils.hpp"
-#include "default_opset.hpp"
-#include "engines_util/test_case.hpp"
-#include "engines_util/test_engines.hpp"
-#include "onnx_import/onnx.hpp"
-#include "util/test_control.hpp"
+#include "common_test_utils/test_case.hpp"
+#include "common_test_utils/test_control.hpp"
+#include "onnx_utils.hpp"
 
-NGRAPH_SUPPRESS_DEPRECATED_START
+using namespace ov;
+using namespace ov::frontend::onnx::tests;
 
-using namespace ngraph;
+static std::string s_manifest = onnx_backend_manifest("${MANIFEST}");
+static std::string s_device = backend_name_to_device("${BACKEND_NAME}");
 
-static std::string s_manifest = "${MANIFEST}";
-static std::string s_device = test::backend_name_to_device("${BACKEND_NAME}");
+OPENVINO_TEST(${BACKEND_NAME}, onnx_model_adaptive_avg_pooling2d_nchw) {
+    const auto model = convert_model("org.pytorch/adaptive_avg_pooling2d_nchw.onnx");
 
-NGRAPH_TEST(${BACKEND_NAME}, onnx_model_adaptive_avg_pooling2d_nchw) {
-    const auto function =
-        onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                            SERIALIZED_ZOO,
-                                                            "onnx/org.pytorch/adaptive_avg_pooling2d_nchw.onnx"));
-
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>({0.9945f,
                                 0.3466f,
                                 0.2894f,
@@ -54,13 +48,10 @@ NGRAPH_TEST(${BACKEND_NAME}, onnx_model_adaptive_avg_pooling2d_nchw) {
     test_case.run();
 }
 
-NGRAPH_TEST(${BACKEND_NAME}, onnx_model_adaptive_avg_pooling2d_chw) {
-    const auto function =
-        onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                            SERIALIZED_ZOO,
-                                                            "onnx/org.pytorch/adaptive_avg_pooling2d_chw.onnx"));
+OPENVINO_TEST(${BACKEND_NAME}, onnx_model_adaptive_avg_pooling2d_chw) {
+    const auto model = convert_model("org.pytorch/adaptive_avg_pooling2d_chw.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>({12.0f, -1.0f, -56.0f, 20.0f, 1.0f, -8.0f, 7.0f, 9.0f});
 
     test_case.add_expected_output<float>(Shape{1, 2, 2}, {5.5f, -18.0f, -3.5f, 8.0f});

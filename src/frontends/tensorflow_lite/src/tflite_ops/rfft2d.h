@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -21,7 +21,7 @@ public:
     Rfft2d(const Output<Node>& data,
            const Output<Node>& fft_length,
            const std::shared_ptr<DecoderBase>& decoder = nullptr)
-            : ov::frontend::tensorflow::InternalOperation(decoder,OutputVector{data, fft_length},1) {
+        : ov::frontend::tensorflow::InternalOperation(decoder, OutputVector{data, fft_length}, 1, "Rfft2d") {
         validate_and_infer_types();
     }
 

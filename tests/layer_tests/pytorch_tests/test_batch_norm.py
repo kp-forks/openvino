@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2023 Intel Corporation
+# Copyright (C) 2018-2025 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
@@ -34,7 +34,7 @@ class TestBatchNorm(PytorchLayerTest):
                 super(aten_batch_norm_train, self).__init__()
                 self.weight = torch.randn(6) if weights else None
                 self.bias = torch.randn(6) if bias else None
-                self.running_mean = torch.randn(6) if running_stats else None 
+                self.running_mean = torch.randn(6) if running_stats else None
                 self.running_var = torch.randn(6) if running_stats else None
                 self.eps = eps
 
@@ -57,6 +57,10 @@ class TestBatchNorm(PytorchLayerTest):
     ])
     @pytest.mark.nightly
     @pytest.mark.precommit
+    @pytest.mark.precommit_fx_backend
+    @pytest.mark.precommit_torch_export
     def test_batch_norm(self, weights, bias, eps, train, running_stats, ie_device, precision, ir_version, kwargs_to_prepare_input):
+        if running_stats and self.use_torch_export():
+            pytest.skip("running_mean not supported by torch.export")
         self._test(*self.create_model(weights, bias, eps, train, running_stats),
                    ie_device, precision, ir_version, kwargs_to_prepare_input=kwargs_to_prepare_input, dynamic_shapes=False, use_mo_convert=False)

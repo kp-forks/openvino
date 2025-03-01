@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -23,8 +23,6 @@
 #include <utility>
 #include <vector>
 
-using std::setprecision;
-
 // clang-format off
 #include "openvino/openvino.hpp"
 #include "slog.hpp"
@@ -46,7 +44,7 @@ static constexpr char pcSimpleSort[] = "simple_sort";
 /**
  * @brief Unicode string wrappers
  */
-#if defined(ENABLE_UNICODE_PATH_SUPPORT) && defined(_WIN32)
+#if defined(OPENVINO_ENABLE_UNICODE_PATH_SUPPORT) && defined(_WIN32)
 #    define tchar                wchar_t
 #    define tstring              std::wstring
 #    define tmain                wmain
@@ -58,7 +56,7 @@ static constexpr char pcSimpleSort[] = "simple_sort";
 #    define TSTRING2STRING(tstr) tstr
 #endif
 
-#if defined(ENABLE_UNICODE_PATH_SUPPORT) && defined(_WIN32)
+#if defined(OPENVINO_ENABLE_UNICODE_PATH_SUPPORT) && defined(_WIN32)
 
 /**
  * @brief Convert wstring to string
@@ -257,6 +255,12 @@ static UNUSED void addRectangles(unsigned char* data,
                                  std::vector<int> rectangles,
                                  std::vector<int> classes,
                                  int thickness) {
+    if (height <= 0) {
+        throw std::runtime_error("height must be greater than 0");
+    }
+    if (width <= 0) {
+        throw std::runtime_error("width must be greater than 0");
+    }
     struct Color {
         unsigned char red;
         unsigned char green;

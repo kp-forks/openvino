@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -7,10 +7,10 @@
 #include <algorithm>
 #include <memory>
 #include <string>
-#include <transformations_visibility.hpp>
 #include <vector>
 
 #include "openvino/op/op.hpp"
+#include "transformations_visibility.hpp"
 
 namespace ov {
 namespace op {

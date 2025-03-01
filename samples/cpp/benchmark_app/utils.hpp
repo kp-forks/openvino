@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -55,9 +55,10 @@ struct InputInfo {
     std::vector<std::string> fileNames;
 };
 using InputsInfo = std::map<std::string, InputInfo>;
-using PartialShapes = std::map<std::string, ngraph::PartialShape>;
+using PartialShapes = std::map<std::string, ov::PartialShape>;
 }  // namespace benchmark_app
 
+bool can_measure_as_static(const std::vector<benchmark_app::InputsInfo>& app_input_info);
 bool is_virtual_device(const std::string& device_name);
 bool is_virtual_device_found(const std::vector<std::string>& device_names);
 void update_device_properties_setting(const std::string& device_name,

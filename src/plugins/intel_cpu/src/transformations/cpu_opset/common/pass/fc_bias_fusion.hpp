@@ -1,34 +1,17 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #pragma once
 
-#include <ngraph/pass/graph_rewrite.hpp>
+#include "openvino/pass/matcher_pass.hpp"
 
-namespace ov {
-namespace intel_cpu {
+namespace ov::intel_cpu {
 
-class NonQuantizedFullyConnectedBiasFusion : public ngraph::pass::MatcherPass {
+class FullyConnectedBiasFusion : public ov::pass::MatcherPass {
 public:
-    OPENVINO_RTTI("NonQuantizedFullyConnectedBiasFusion", "0");
-    NonQuantizedFullyConnectedBiasFusion();
+    OPENVINO_MATCHER_PASS_RTTI("FullyConnectedBiasFusion");
+    FullyConnectedBiasFusion();
 };
 
-class QuantizedFullyConnectedBiasFusion : public ngraph::pass::MatcherPass {
-public:
-    OPENVINO_RTTI("FullyConnectedDQBiasFusion", "0");
-    QuantizedFullyConnectedBiasFusion();
-};
-
-class FullyConnectedBiasFusion : public ngraph::pass::GraphRewrite {
-public:
-    OPENVINO_RTTI("FullyConnectedBiasFusion", "0");
-    FullyConnectedBiasFusion() {
-        add_matcher<NonQuantizedFullyConnectedBiasFusion>();
-        add_matcher<QuantizedFullyConnectedBiasFusion>();
-    }
-};
-
-}   // namespace intel_cpu
-}   // namespace ov
+}  // namespace ov::intel_cpu

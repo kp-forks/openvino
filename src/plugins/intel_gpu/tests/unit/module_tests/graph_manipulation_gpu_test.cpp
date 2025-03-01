@@ -1,8 +1,9 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #include "test_utils.h"
+#include "random_generator.hpp"
 
 #include "intel_gpu/runtime/engine.hpp"
 #include "intel_gpu/runtime/memory.hpp"
@@ -35,8 +36,8 @@ TEST(basic, test1) {
     auto weights1 = engine.allocate_memory({ data_types::f16, format::yxfb,{ 1, 1, 2, 1 } });
     auto weights2 = engine.allocate_memory({ data_types::f32, format::byxf,{ 1, 1, 1, 2 } });
 
-    set_values(input, { FLOAT16(1.1f), FLOAT16(1.2f), FLOAT16(1.3f), FLOAT16(1.4f) });
-    set_values(weights1, { FLOAT16(2.1f), FLOAT16(3.1f) });
+    set_values(input, { ov::float16(1.1f), ov::float16(1.2f), ov::float16(1.3f), ov::float16(1.4f) });
+    set_values(weights1, { ov::float16(2.1f), ov::float16(3.1f) });
     set_values(weights2, { 1.1f, 0.1f });
 
     topology topology;
@@ -47,7 +48,7 @@ TEST(basic, test1) {
     topology.add(reorder("reorder2", input_info("input"), layout(data_types::f32, format::byxf, tensor(4))));
     topology.add(reorder("reorder1", input_info("reshape1"), layout(data_types::f32, format::byxf, tensor(4))));
     topology.add(concatenation("concat", { input_info("reorder1"), input_info("weights2") }, 3));
-    topology.add(convolution("conv2", { input_info("reorder2") }, { "concat" }));
+    topology.add(convolution("conv2", input_info("reorder2"), "concat", "", 1, {1, 1}, {1, 1}, {0, 0}, {0, 0}, false));
 
     program::ptr prog = program::build_program(engine, topology, config, false);
     network::ptr network = network::allocate_network(engine, prog);
@@ -88,13 +89,12 @@ TEST(add_intermediate_gpu, test1)
     topology.add(input_layout("input", input->get_layout()));
     topology.add(data("weights", weights));
     topology.add(data("weights2", weights2));
-    topology.add(cldnn::convolution("conv1a", { input_info("input") }, { "weights" }));
-    topology.add(cldnn::convolution("conv1b", { input_info("input") }, { "weights" }));
-    topology.add(cldnn::convolution("conv2a", { input_info("conv1a") }, { "weights2" }));
+    topology.add(cldnn::convolution("conv1a", input_info("input"), "weights", "", 1, {1, 1}, {1, 1}, {0, 0}, {0, 0}, false));
+    topology.add(cldnn::convolution("conv1b", input_info("input"), "weights", "", 1, {1, 1}, {1, 1}, {0, 0}, {0, 0}, false));
+    topology.add(cldnn::convolution("conv2a", input_info("conv1a"), "weights2", "", 1, {1, 1}, {1, 1}, {0, 0}, {0, 0}, false));
     auto new_reorder = std::make_shared<reorder>("reorder", input_info("nothing"), input->get_layout());
     program::ptr prog = program::build_program(engine, topology, config, false, true);
     prog->add_intermediate(new_reorder, prog->get_node("conv1a"), 0);
-    prog->dump_program("custom_dump", true);
 
     program_wrapper::build(*prog);
 
@@ -146,18 +146,15 @@ TEST(add_intermediate_gpu, test2)
     topology.add(input_layout("input", input->get_layout()));
     topology.add(data("weights2", weights2));
 
-    topology.add(cldnn::convolution("conv2a", { input_info("input") }, { "weights2" }));
-    topology.add(cldnn::convolution("conv2b", { input_info("input") }, { "weights2" }));
+    topology.add(cldnn::convolution("conv2a", input_info("input"), "weights2", "", 1, {1, 1}, {1, 1}, {0, 0}, {0, 0}, false));
+    topology.add(cldnn::convolution("conv2b", input_info("input"), "weights2", "", 1, {1, 1}, {1, 1}, {0, 0}, {0, 0}, false));
 
-    std::vector<primitive_id> w_vec;
-    w_vec.push_back("weights");
-    auto new_conv = std::make_shared<convolution>("conv1a", input_info("input"), w_vec);
+    auto new_conv = std::make_shared<convolution>("conv1a", input_info("input"), "weights", "", 1, ov::Strides{1, 1}, ov::Strides{1, 1}, ov::CoordinateDiff{0, 0}, ov::CoordinateDiff{0, 0}, false);
     auto weights_node = std::make_shared<data>("weights", weights);
     program::ptr prog = program::build_program(engine, topology, config, false, true);
 
     prog->add_intermediate(new_conv, prog->get_node("conv2a"), 0, true, true);
     program_wrapper::add_connection(*prog, prog->get_or_create(weights_node), prog->get_or_create(new_conv));
-    prog->dump_program("custom_dump", true);
 
     program_wrapper::build(*prog);
 
@@ -181,12 +178,13 @@ TEST(add_intermediate_gpu, test2)
 }
 
 TEST(processing_order, bfs_order_restoring) {
+    tests::random_generator rg(GET_SUITE_NAME);
     auto& engine = get_test_engine();
 
     ExecutionConfig config = get_test_default_config(engine);
     config.set_property(ov::intel_gpu::optimize_data(true));
 
-    if (config.get_property(ov::intel_gpu::queue_type) != QueueTypes::out_of_order)
+    if (config.get_queue_type() != QueueTypes::out_of_order)
         GTEST_SKIP();
 
     auto input = engine.allocate_memory({ data_types::f32, format::bfyx, { 1, 3, 8, 8 } });
@@ -196,9 +194,9 @@ TEST(processing_order, bfs_order_restoring) {
     auto output_low_mem = engine.allocate_memory({ data_types::f32, format::bfyx, { 1, 1, 1, 1 } });
     auto output_high_mem = engine.allocate_memory({ data_types::f32, format::bfyx, { 1, 1, 1, 1 } });
 
-    set_values(eltwise_mem,  generate_random_1d<float>(1, 0, 10));
-    set_values(input_low_mem,  generate_random_1d<float>(3, -10, 0));
-    set_values(input_high_mem, generate_random_1d<float>(3, 1, 10));
+    set_values(eltwise_mem,  rg.generate_random_1d<float>(1, 0, 10));
+    set_values(input_low_mem,  rg.generate_random_1d<float>(3, -10, 0));
+    set_values(input_high_mem, rg.generate_random_1d<float>(3, 1, 10));
     set_values(output_low_mem, { -127.0f });
     set_values(output_high_mem, { 127.0f });
 

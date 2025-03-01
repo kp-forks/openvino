@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -6,8 +6,8 @@
 
 #include <gtest/gtest.h>
 
-#include <openvino/frontend/extension/op.hpp>
-#include <openvino/frontend/manager.hpp>
+#include "openvino/frontend/extension/op.hpp"
+#include "openvino/frontend/manager.hpp"
 
 struct OpExtensionFEParam {
     std::string m_frontEndName;
@@ -18,7 +18,7 @@ struct OpExtensionFEParam {
 
 class Relu : public ov::op::Op {
 public:
-    OPENVINO_OP("Relu");
+    OPENVINO_OP("Relu", "frontend_test");
 
     Relu() = default;
     Relu(const ov::Output<ov::Node>& arg) : ov::op::Op({arg}) {

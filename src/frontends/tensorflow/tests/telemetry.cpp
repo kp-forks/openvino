@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -61,7 +61,7 @@ TEST(TFTelemetryTest, test_nonexistent_add) {
     FrontEndManager fem;
     FrontEnd::Ptr frontEnd;
     InputModel::Ptr inputModel;
-    ASSERT_NO_THROW(frontEnd = fem.load_by_framework(TF_FE));
+    OV_ASSERT_NO_THROW(frontEnd = fem.load_by_framework(TF_FE));
     ASSERT_NE(frontEnd, nullptr);
 
     TelemetryMock m_test_telemetry;
@@ -75,20 +75,20 @@ TEST(TFTelemetryTest, test_nonexistent_add) {
     m_test_telemetry.clear();
     EXPECT_NO_THROW(frontEnd->add_extension(telemetry_extension));
 
-    auto model_filename = FrontEndTestUtils::make_model_path(string(TEST_TENSORFLOW_MODELS_DIRNAME) +
-                                                             string("nonexistent_add/nonexistent_add.pb"));
-    ASSERT_NO_THROW(inputModel = frontEnd->load(model_filename));
+    auto model_filename = FrontEndTestUtils::make_model_path(std::string(TEST_TENSORFLOW_MODELS_DIRNAME) +
+                                                             std::string("nonexistent_add/nonexistent_add.pb"));
+    OV_ASSERT_NO_THROW(inputModel = frontEnd->load(model_filename));
     ASSERT_NE(inputModel, nullptr);
-    shared_ptr<ngraph::Function> function;
+    shared_ptr<ov::Model> model;
 
     try {
-        function = frontEnd->convert(inputModel);
+        model = frontEnd->convert(inputModel);
         FAIL() << "Non-existent operation Adddd must not be supported by TF FE.";
     } catch (const OpConversionFailure& error) {
-        string error_message = error.what();
-        string ref_message = "Internal error, no translator found for operation(s): Adddd";
-        ASSERT_TRUE(error_message.find(ref_message) != string::npos);
-        ASSERT_EQ(function, nullptr);
+        std::string error_message = error.what();
+        std::string ref_message = "Internal error, no translator found for operation(s): Adddd";
+        ASSERT_TRUE(error_message.find(ref_message) != std::string::npos);
+        ASSERT_EQ(model, nullptr);
 
         // check telemetry data
         EXPECT_EQ(m_test_telemetry.m_error_cnt, 0);
