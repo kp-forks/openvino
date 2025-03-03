@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -51,11 +51,27 @@ private:
 };
 
 class InternalOperation : public ov::frontend::tensorflow::FrameworkNode {
-public:
-    InternalOperation(const std::shared_ptr<DecoderBase>& decoder, const OutputVector& inputs, size_t num_outputs)
+protected:
+    InternalOperation(const std::shared_ptr<DecoderBase>& decoder,
+                      const OutputVector& inputs,
+                      size_t num_outputs,
+                      const std::string& no_conversion_reason)
         : ov::frontend::tensorflow::FrameworkNode(decoder != nullptr ? decoder : std::make_shared<DecoderFake>(),
                                                   inputs,
-                                                  num_outputs) {}
+                                                  num_outputs),
+          m_no_conversion_reason(no_conversion_reason) {}
+
+public:
+    OPENVINO_OP("InternalOperation", "util", ov::frontend::tensorflow::FrameworkNode);
+    // get a reason why some operation is unable to convert to OpenVINO opset
+    // we store this information for InternalOperation to elaborate the reason
+    // for cases such as Constant node of string type
+    std::string get_no_conversion_reason() const {
+        return m_no_conversion_reason;
+    }
+
+private:
+    std::string m_no_conversion_reason;
 };
 }  // namespace tensorflow
 }  // namespace frontend

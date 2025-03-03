@@ -1,20 +1,20 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-#ifndef MULTIDEVICEPLUGIN_NONCOPYABLE_H
-#define MULTIDEVICEPLUGIN_NONCOPYABLE_H
+#pragma once
 
 #ifdef  MULTIUNITTEST
 #define MOCKTESTMACRO virtual
-#define MultiDevicePlugin MockMultiDevicePlugin
+#define auto_plugin mock_auto_plugin
 #else
 #define MOCKTESTMACRO
 #endif
 
-namespace MultiDevicePlugin {
+namespace ov {
+namespace auto_plugin {
 class NonCopyable {
 public:
     NonCopyable(const NonCopyable&) = delete;
@@ -27,6 +27,5 @@ protected:
     NonCopyable() = default;
     virtual ~NonCopyable() = default;
 };
-} // namespace MultiDevicePlugin
-
-#endif //MULTIDEVICEPLUGIN_NONCOPYABLE_H
+} // namespace auto_plugin
+} // namespace ov

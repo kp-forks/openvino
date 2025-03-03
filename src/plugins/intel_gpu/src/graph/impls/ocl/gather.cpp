@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -24,7 +24,7 @@ static kernel_selector::gather_axis convert_axis(int64_t axis, size_t rank) {
             case -1: return kernel_selector::gather_axis::Y;
             case -2: return kernel_selector::gather_axis::FEATURE;
             case -3: return kernel_selector::gather_axis::BATCH;
-            default: IE_THROW() << "Unsupported gather axis: " << axis;
+            default: OPENVINO_THROW("Unsupported gather axis: ", axis);
         }
     } else if (rank == 5) {
         switch (axis) {
@@ -35,7 +35,7 @@ static kernel_selector::gather_axis convert_axis(int64_t axis, size_t rank) {
             case -2: return kernel_selector::gather_axis::Z;
             case -3: return kernel_selector::gather_axis::FEATURE;
             case -4: return kernel_selector::gather_axis::BATCH;
-            default: IE_THROW() << "Unsupported gather axis: " << axis;
+            default: OPENVINO_THROW("Unsupported gather axis: ", axis);
         }
     } else if (rank == 6) {
         switch (axis) {
@@ -48,10 +48,10 @@ static kernel_selector::gather_axis convert_axis(int64_t axis, size_t rank) {
             case -3: return kernel_selector::gather_axis::W;
             case -4: return kernel_selector::gather_axis::FEATURE;
             case -5: return kernel_selector::gather_axis::BATCH;
-            default: IE_THROW() << "Unsupported gather axis: " << axis;
+            default: OPENVINO_THROW("Unsupported gather axis: ", axis);
         }
     } else {
-        IE_THROW() << "Unsupported gather axis: " << axis;
+        OPENVINO_THROW("Unsupported gather axis: ", axis);
     }
 }
 
@@ -59,19 +59,41 @@ struct gather_impl : typed_primitive_impl_ocl<gather> {
     using parent = typed_primitive_impl_ocl<gather>;
     using parent::parent;
     using kernel_selector_t = kernel_selector::gather_kernel_selector;
-    using kernel_params_t = std::pair<kernel_selector::gather_params, kernel_selector::gather_optional_params>;
+    using kernel_params_t = kernel_selector::gather_params;
 
-    DECLARE_OBJECT_TYPE_SERIALIZATION
+    DECLARE_OBJECT_TYPE_SERIALIZATION(cldnn::ocl::gather_impl)
 
     std::unique_ptr<primitive_impl> clone() const override {
-        return make_unique<gather_impl>(*this);
+        return make_deep_copy<gather_impl, kernel_params_t>(*this);
+    }
+
+    void load(BinaryInputBuffer& ib) override {
+        parent::load(ib);
+        if (is_dynamic() && _kernel_data.kernelName.length() != 0) {
+            auto& kernel_selector = kernel_selector_t::Instance();
+            auto kernel_impl = kernel_selector.GetImplementation(_kernel_data.kernelName);
+            kernel_impl->GetUpdateDispatchDataFunc(_kernel_data);
+        }
+    }
+
+protected:
+    kernel_arguments_data get_arguments(const typed_primitive_inst<gather>& instance) const override {
+        kernel_arguments_data args = parent::get_arguments(instance);
+        const auto& desc = instance.get_typed_desc<gather>();
+
+        if (desc->decompression_scale.is_valid())
+            args.inputs.push_back(instance.dep_memory_ptr(2));
+
+        if (desc->decompression_zero_point.is_valid())
+            args.inputs.push_back(instance.dep_memory_ptr(3));
+
+        return args;
     }
 
 public:
     static kernel_params_t get_kernel_params(const kernel_impl_params& impl_param, bool is_shape_agnostic = false) {
         const auto& primitive = impl_param.typed_desc<gather>();
         auto params = get_default_params<kernel_selector::gather_params>(impl_param, is_shape_agnostic);
-        auto optional_params = get_default_optional_params<kernel_selector::gather_optional_params>(impl_param.get_program());
 
         auto input_layout = impl_param.get_input_layout(0);
         params.axis = convert_axis(primitive->axis, input_layout.get_rank());
@@ -96,7 +118,23 @@ public:
 
         params.outputs[0] = convert_data_tensor(output_layout);
         params.inputs.push_back(convert_data_tensor(impl_param.get_input_layout(1)));
-        return {params, optional_params};
+
+        bool commpressed = primitive->decompression_scale.is_valid();
+        bool with_zp = primitive->decompression_zero_point.is_valid();
+        if (commpressed) {
+            params.compressed = true;
+            params.decompression_scale = convert_data_tensor(impl_param.get_input_layout(2));
+            if (with_zp) {
+                params.has_decompression_zp = true;
+                params.decompression_zero_point = convert_data_tensor(impl_param.get_input_layout(3));
+            } else if (primitive->decompression_zero_point_scalar.has_value()) {
+                params.has_decompression_zp = true;
+                params.scalar_zp = true;
+                params.zp_value = primitive->decompression_zero_point_scalar.value();
+            }
+        }
+
+        return params;
     }
 
     static kernel_impl_params static_canonicalize_shapes(const kernel_impl_params& impl_params) {
@@ -116,7 +154,12 @@ public:
             out_layout.format = format::adjust_to_rank(out_layout.format, output_pshape.size());
         }
 
-        return primitive_impl::static_canonicalize_shapes(updated_impl_params);
+        for (auto& input_layout : updated_impl_params.input_layouts) {
+            input_layout.set_partial_shape(extend_shape_to_rank_from_end(input_layout.get_partial_shape()));
+        }
+        out_layout.set_partial_shape(extend_shape_to_rank_from_end(out_layout.get_partial_shape()));
+
+        return updated_impl_params;
     }
 
     kernel_impl_params canonicalize_shapes(const kernel_impl_params& impl_params) const override {
@@ -124,8 +167,13 @@ public:
     }
 
     void update_dispatch_data(const kernel_impl_params& impl_param) override {
-        auto kernel_params = get_kernel_params(impl_param, true);
-        (_kernel_data.update_dispatch_data_func)(kernel_params.first, _kernel_data);
+        // If model loaded from cache, params are not initialized, so we create a new object and reuse it in the future
+        if (_kernel_data.params == nullptr) {
+            _kernel_data.params = std::make_shared<kernel_params_t>(get_kernel_params(impl_param, true));
+        }
+
+        update_shapes(*_kernel_data.params, impl_param);
+        (_kernel_data.update_dispatch_data_func)(*_kernel_data.params, _kernel_data);
     }
 };
 
@@ -137,6 +185,8 @@ attach_gather_impl::attach_gather_impl() {
         data_types::f16,
         data_types::i8,
         data_types::u8,
+        data_types::i4,
+        data_types::u4,
         data_types::i32
     };
 
@@ -176,6 +226,8 @@ attach_gather_impl::attach_gather_impl() {
         std::make_tuple(data_types::i32, format::bfyx),
         std::make_tuple(data_types::i8, format::bfyx),
         std::make_tuple(data_types::u8, format::bfyx),
+        std::make_tuple(data_types::i4, format::bfyx),
+        std::make_tuple(data_types::u4, format::bfyx),
 
         std::make_tuple(data_types::f32, format::bfzyx),
         std::make_tuple(data_types::f16, format::bfzyx),
@@ -274,3 +326,4 @@ attach_gather_impl::attach_gather_impl() {
 }  // namespace cldnn
 
 BIND_BINARY_BUFFER_WITH_TYPE(cldnn::ocl::gather_impl)
+BIND_BINARY_BUFFER_WITH_TYPE(cldnn::gather)

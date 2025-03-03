@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -15,10 +15,11 @@ namespace py = pybind11;
 
 void regclass_graph_Type(py::module m) {
     py::class_<ov::element::Type, std::shared_ptr<ov::element::Type>> type(m, "Type");
-    type.doc() = "openvino.runtime.Type wraps ov::element::Type";
+    type.doc() = "openvino.Type wraps ov::element::Type";
 
     type.def(py::init([](py::object& np_literal) {
-                 return Common::dtype_to_ov_type().at(py::str(py::dtype::from_args(np_literal)));
+                 auto dtype = py::dtype::from_args(np_literal);
+                 return Common::type_helpers::get_ov_type(dtype);
              }),
              py::arg("dtype"),
              R"(
@@ -27,10 +28,9 @@ void regclass_graph_Type(py::module m) {
             :param dtype: numpy dtype
             :type dtype: numpy.dtype
             :return: OpenVINO type object
-            :rtype: ov.Type
+            :rtype: openvino.Type
         )");
 
-    type.attr("undefined") = ov::element::undefined;
     type.attr("dynamic") = ov::element::dynamic;
     type.attr("boolean") = ov::element::boolean;
     type.attr("f16") = ov::element::f16;
@@ -48,15 +48,22 @@ void regclass_graph_Type(py::module m) {
     type.attr("u32") = ov::element::u32;
     type.attr("u64") = ov::element::u64;
     type.attr("bf16") = ov::element::bf16;
+    type.attr("nf4") = ov::element::nf4;
+    type.attr("f8e4m3") = ov::element::f8e4m3;
+    type.attr("f8e5m2") = ov::element::f8e5m2;
+    type.attr("string") = ov::element::string;
+    type.attr("f4e2m1") = ov::element::f4e2m1;
+    type.attr("f8e8m0") = ov::element::f8e8m0;
 
     type.def("__hash__", &ov::element::Type::hash);
     type.def("__repr__", [](const ov::element::Type& self) {
+        std::string class_name = Common::get_class_name(self);
         if (self == ov::element::f32 || self == ov::element::f64) {
             std::string bitwidth = std::to_string(self.bitwidth());
-            return "<Type: '" + self.c_type_string() + bitwidth + "'>";
+            return "<" + class_name + ": '" + self.c_type_string() + bitwidth + "'>";
         }
 
-        return "<Type: '" + self.c_type_string() + "'>";
+        return "<" + class_name + ": '" + self.c_type_string() + "'>";
     });
     type.def(
         "__eq__",
@@ -77,6 +84,7 @@ void regclass_graph_Type(py::module m) {
     type.def_property_readonly("signed", &ov::element::Type::is_signed);
     type.def("is_quantized", &ov::element::Type::is_quantized);
     type.def_property_readonly("quantized", &ov::element::Type::is_quantized);
+    type.def("to_string", &ov::element::Type::to_string);
     type.def("get_type_name", &ov::element::Type::get_type_name);
     type.def_property_readonly("type_name", &ov::element::Type::get_type_name);
     type.def("compatible",
@@ -87,7 +95,7 @@ void regclass_graph_Type(py::module m) {
                 `other`.
 
                 :param other: The element type to compare this element type to.
-                :type other: openvino.runtime.Type
+                :type other: openvino.Type
                 :return: `True` if element types are compatible, otherwise `False`.
                 :rtype: bool
              )");
@@ -108,16 +116,16 @@ void regclass_graph_Type(py::module m) {
             otherwise return None.
 
             :param other: The element type to merge with this element type.
-            :type other: openvino.runtime.Type
+            :type other: openvino.Type
             :return: If element types are compatible return the least
                      restrictive Type, otherwise `None`.
-            :rtype: Union[openvino.runtime.Type|None]
+            :rtype: Union[openvino.Type|None]
         )");
 
     type.def(
         "to_dtype",
         [](ov::element::Type& self) {
-            return Common::ov_type_to_dtype().at(self);
+            return Common::type_helpers::get_dtype(self);
         },
         R"(
             Convert Type to numpy dtype.

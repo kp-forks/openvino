@@ -1,14 +1,18 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #include "openvino/runtime/icompiled_model.hpp"
 
-#include "dev/converter_utils.hpp"
-#include "icompiled_model_wrapper.hpp"
 #include "openvino/core/model.hpp"
+#include "openvino/runtime/iasync_infer_request.hpp"
+#include "openvino/runtime/iplugin.hpp"
 #include "openvino/runtime/properties.hpp"
 #include "transformations/utils/utils.hpp"
+
+#if defined(OPENVINO_GNU_LIBC) && !defined(__ANDROID__)
+#    include <malloc.h>
+#endif
 
 ov::ICompiledModel::ICompiledModel(const std::shared_ptr<const ov::Model>& model,
                                    const std::shared_ptr<const ov::IPlugin>& plugin,
@@ -18,7 +22,7 @@ ov::ICompiledModel::ICompiledModel(const std::shared_ptr<const ov::Model>& model
 
 ov::ICompiledModel::ICompiledModel(const std::shared_ptr<const ov::Model>& model,
                                    const std::shared_ptr<const ov::IPlugin>& plugin,
-                                   const ov::RemoteContext& context,
+                                   const ov::SoPtr<ov::IRemoteContext>& context,
                                    const std::shared_ptr<ov::threading::ITaskExecutor>& task_executor,
                                    const std::shared_ptr<ov::threading::ITaskExecutor>& callback_executor)
     : m_plugin(plugin),
@@ -47,35 +51,66 @@ ov::ICompiledModel::ICompiledModel(const std::shared_ptr<const ov::Model>& model
                 }
             }
         }
-
-        if (add_operation_names) {
-            for (const auto& param : model->get_parameters()) {
-                const auto& param_name = param->get_friendly_name();
-                OPENVINO_ASSERT(!m_plugin->is_new_api() || leaf_names.find(param_name) == leaf_names.end() ||
+        std::unordered_map<std::shared_ptr<descriptor::Tensor>,
+                           std::shared_ptr<descriptor::Tensor>,
+                           descriptor::TensorExtension::Hasher,
+                           descriptor::TensorExtension::Equal>
+            tensor_map;
+        for (const auto& param : model->get_parameters()) {
+            const auto& param_name = param->get_friendly_name();
+            auto new_param = ov::as_type_ptr<ov::op::v0::Parameter>(param->copy_with_new_inputs({}));
+            new_param->set_friendly_name(param_name);
+            if (add_operation_names) {
+                OPENVINO_ASSERT(leaf_names.find(param_name) == leaf_names.end() ||
                                     param->output(0).get_names().find(param_name) != param->output(0).get_names().end(),
                                 "Model operation names have collisions with tensor names.",
-                                " Please use MO to generate new IR version, it should allow to avoid the issue");
+                                " Please use OVC to generate new IR version, it should allow to avoid the issue");
                 leaf_names.insert(param_name);
                 param->output(0).get_tensor().add_names({param_name});
-                m_inputs.emplace_back(
-                    ov::Output<const ov::Node>{param->output(0).get_node(), param->output(0).get_index()});
+                new_param->output(0).get_tensor().add_names({param_name});
             }
-            for (const auto& result : model->get_results()) {
-                auto fake_param = std::make_shared<ov::op::v0::Parameter>(result->get_output_element_type(0),
-                                                                          result->get_output_partial_shape(0));
-                const std::string res_name = ov::op::util::create_ie_output_name(result->input_value(0));
-                OPENVINO_ASSERT(!m_plugin->is_new_api() || leaf_names.find(res_name) == leaf_names.end() ||
+            new_param->set_element_type(param->get_element_type());
+            new_param->set_layout(param->get_layout());
+            new_param->output(0).get_rt_info() = param->output(0).get_rt_info();
+            auto old_tensor = param->output(0).get_tensor_ptr();
+            if (tensor_map.count(old_tensor)) {
+                new_param->output(0).set_tensor_ptr(tensor_map[old_tensor]);
+            } else {
+                tensor_map[old_tensor] = new_param->output(0).get_tensor_ptr();
+            }
+            new_param->validate_and_infer_types();
+            m_inputs.emplace_back(new_param->output(0));
+        }
+        for (const auto& result : model->get_results()) {
+            auto fake_param = std::make_shared<ov::op::v0::Parameter>(result->get_output_element_type(0),
+                                                                      result->get_output_partial_shape(0));
+            OPENVINO_SUPPRESS_DEPRECATED_START
+            const std::string res_name = ov::op::util::create_ie_output_name(result->input_value(0));
+            OPENVINO_SUPPRESS_DEPRECATED_END
+            fake_param->set_friendly_name(res_name);
+            fake_param->set_element_type(result->get_element_type());
+            fake_param->validate_and_infer_types();
+            auto new_result = result->copy_with_new_inputs({fake_param});
+            new_result->set_friendly_name(result->get_friendly_name());
+            if (add_operation_names) {
+                OPENVINO_ASSERT(leaf_names.find(res_name) == leaf_names.end() ||
                                     result->output(0).get_names().find(res_name) != result->output(0).get_names().end(),
                                 "Model operation names have collisions with tensor names.",
-                                " Please use MO to generate new IR version, it should allow to avoid the issue");
+                                " Please use OVC to generate new IR version, it should allow to avoid the issue");
                 leaf_names.insert(res_name);
                 result->output(0).get_tensor().add_names({res_name});
-                m_outputs.emplace_back(
-                    ov::Output<const ov::Node>{result->output(0).get_node(), result->output(0).get_index()});
+                new_result->output(0).get_tensor().add_names({res_name});
             }
-        } else {
-            m_inputs = model->inputs();
-            m_outputs = model->outputs();
+            auto r = ov::as_type_ptr<ov::op::v0::Result>(new_result);
+            r->set_layout(result->get_layout());
+            new_result->output(0).get_rt_info() = result->output(0).get_rt_info();
+            auto old_tensor = result->output(0).get_tensor_ptr();
+            if (tensor_map.count(old_tensor)) {
+                new_result->output(0).set_tensor_ptr(tensor_map[old_tensor]);
+            } else {
+                tensor_map[old_tensor] = new_result->output(0).get_tensor_ptr();
+            }
+            m_outputs.emplace_back(new_result->output(0));
         }
     }
 }
@@ -102,11 +137,33 @@ const std::shared_ptr<ov::threading::ITaskExecutor> ov::ICompiledModel::get_call
     return m_callback_executor;
 }
 
-std::shared_ptr<ov::IRemoteContext> ov::ICompiledModel::get_context() const {
-    if (auto wrapper = dynamic_cast<const InferenceEngine::ICompiledModelWrapper*>(this)) {
-        return ov::legacy_convert::convert_remote_context(wrapper->get_executable_network()->GetContext());
-    }
-    if (m_context._impl)
-        return m_context._impl;
+void ov::ICompiledModel::set_task_executor(const std::shared_ptr<ov::threading::ITaskExecutor> task_executor) {
+    m_task_executor = task_executor;
+}
+
+void ov::ICompiledModel::set_callback_executor(const std::shared_ptr<ov::threading::ITaskExecutor> callback_executor) {
+    m_callback_executor = callback_executor;
+}
+
+ov::SoPtr<ov::IRemoteContext> ov::ICompiledModel::get_context() const {
+    if (m_context)
+        return m_context;
     return m_plugin->get_default_context({});
+}
+
+void ov::ICompiledModel::set_model_shared_object(ov::Model& model, const std::shared_ptr<void>& shared_object) {
+    model.m_shared_object = shared_object;
+}
+
+void ov::ICompiledModel::release_memory() {
+    // nothing to do
+}
+
+ov::ICompiledModel::~ICompiledModel() {
+#if defined(OPENVINO_GNU_LIBC) && !defined(__ANDROID__)
+    // Linux memory margent doesn't return system memory immediate after release.
+    // It depends on memory chunk size and allocation history.
+    // Try return memory from a process to system now to reduce memory usage and not wait to the end of the process.
+    malloc_trim(0);
+#endif
 }

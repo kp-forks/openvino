@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -22,18 +22,13 @@
 #include "openvino/runtime/threading/executor_manager.hpp"
 #include "openvino/util/pp.hpp"
 
-namespace InferenceEngine {
-
-class IPluginWrapper;
-class IExtension;
-
-}  // namespace InferenceEngine
-
 namespace ov {
+
+class ICompiledModel;
 
 /**
  * @defgroup ov_dev_api OpenVINO Plugin API
- * @brief Defines Inference Engine Plugin API which can be used in plugin development
+ * @brief Defines OpenVINO Plugin API which can be used in plugin development
  *
  * @{
  * @defgroup ov_dev_api_plugin_api Plugin base classes
@@ -133,7 +128,7 @@ public:
      */
     virtual std::shared_ptr<ov::ICompiledModel> compile_model(const std::shared_ptr<const ov::Model>& model,
                                                               const ov::AnyMap& properties,
-                                                              const ov::RemoteContext& context) const = 0;
+                                                              const ov::SoPtr<ov::IRemoteContext>& context) const = 0;
 
     /**
      * @brief Sets properties for plugin, acceptable keys can be found in openvino/runtime/properties.hpp
@@ -157,7 +152,7 @@ public:
      *
      * @return A remote context object
      */
-    virtual std::shared_ptr<ov::IRemoteContext> create_context(const ov::AnyMap& remote_properties) const = 0;
+    virtual ov::SoPtr<ov::IRemoteContext> create_context(const ov::AnyMap& remote_properties) const = 0;
 
     /**
      * @brief Provides a default remote context instance if supported by a plugin
@@ -165,7 +160,7 @@ public:
      *
      * @return The default context.
      */
-    virtual std::shared_ptr<ov::IRemoteContext> get_default_context(const ov::AnyMap& remote_properties) const = 0;
+    virtual ov::SoPtr<ov::IRemoteContext> get_default_context(const ov::AnyMap& remote_properties) const = 0;
 
     /**
      * @brief Creates an compiled model from an previously exported model using plugin implementation
@@ -187,7 +182,7 @@ public:
      * @return An Compiled model
      */
     virtual std::shared_ptr<ov::ICompiledModel> import_model(std::istream& model,
-                                                             const ov::RemoteContext& context,
+                                                             const ov::SoPtr<ov::IRemoteContext>& context,
                                                              const ov::AnyMap& properties) const = 0;
 
     /**
@@ -198,15 +193,6 @@ public:
      */
     virtual ov::SupportedOpsMap query_model(const std::shared_ptr<const ov::Model>& model,
                                             const ov::AnyMap& properties) const = 0;
-
-    /**
-     * @deprecated This method allows to load legacy Inference Engine Extensions and will be removed in 2024.0 release
-     * @brief Registers legacy extension within plugin
-     * @param extension - pointer to already loaded legacy extension
-     */
-    OPENVINO_DEPRECATED(
-        "This method allows to load legacy Inference Engine Extensions and will be removed in 2024.0 release")
-    virtual void add_extension(const std::shared_ptr<InferenceEngine::IExtension>& extension);
 
     /**
      * @brief Sets pointer to ICore interface
@@ -221,30 +207,21 @@ public:
     std::shared_ptr<ov::ICore> get_core() const;
 
     /**
-     * @brief Provides an information about used API
-     * @return true if new API is used
-     */
-    bool is_new_api() const;
-
-    /**
      * @brief Gets reference to tasks execution manager
      * @return Reference to ExecutorManager interface
      */
     const std::shared_ptr<ov::threading::ExecutorManager>& get_executor_manager() const;
 
-    ~IPlugin() = default;
+    virtual ~IPlugin() = default;
 
 protected:
     IPlugin();
 
 private:
-    friend ::InferenceEngine::IPluginWrapper;
-
     std::string m_plugin_name;                                           //!< A device name that plugins enables
     std::weak_ptr<ov::ICore> m_core;                                     //!< A pointer to ICore interface
     std::shared_ptr<ov::threading::ExecutorManager> m_executor_manager;  //!< A tasks execution manager
     ov::Version m_version;                                               //!< Member contains plugin version
-    bool m_is_new_api;                                                   //!< A flag which shows used API
 };
 
 /**
@@ -253,12 +230,14 @@ private:
  * @param model Original model
  * @param transform Transformation pipeline function
  * @param is_node_supported Function returning whether node is supported or not
+ * @param query_model_ratio The percentage of the model can be queried during query model (0 if not query)
  * @return Set of strings which contains supported node names
  */
 OPENVINO_RUNTIME_API std::unordered_set<std::string> get_supported_nodes(
     const std::shared_ptr<const ov::Model>& model,
     std::function<void(std::shared_ptr<ov::Model>&)> transform,
-    std::function<bool(const std::shared_ptr<ov::Node>)> is_node_supported);
+    std::function<bool(const std::shared_ptr<ov::Node>)> is_node_supported,
+    float query_model_ratio = 1.0f);
 
 /**
  * @private
@@ -271,7 +250,7 @@ using CreatePluginFunc = void(std::shared_ptr<::ov::IPlugin>&);
  * @ingroup ov_dev_api_plugin_api
  */
 #ifndef OV_CREATE_PLUGIN
-#    define OV_CREATE_PLUGIN CreatePluginEngine
+#    define OV_CREATE_PLUGIN create_plugin_engine
 #endif
 
 /**
@@ -292,8 +271,6 @@ constexpr static const auto create_plugin_function = OV_PP_TOSTRING(OV_CREATE_PL
         try {                                                                                            \
             plugin = ::std::make_shared<PluginType>(__VA_ARGS__);                                        \
             plugin->set_version(version);                                                                \
-        } catch (const InferenceEngine::Exception& ex) {                                                 \
-            OPENVINO_THROW(ex.what());                                                                   \
         } catch (const std::exception& ex) {                                                             \
             OPENVINO_THROW(ex.what());                                                                   \
         }                                                                                                \

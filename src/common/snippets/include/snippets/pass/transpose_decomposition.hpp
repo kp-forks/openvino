@@ -1,13 +1,12 @@
-// Copyright (C) 2022 Intel Corporation
+// Copyright (C) 2023 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #pragma once
 
-#include <ngraph/pass/graph_rewrite.hpp>
-#include <ngraph/pattern/matcher.hpp>
+#include "openvino/pass/matcher_pass.hpp"
 
-namespace ngraph {
+namespace ov {
 namespace snippets {
 namespace pass {
 
@@ -16,13 +15,15 @@ namespace pass {
  * @brief Decompose Transpose to Load + Store wrapped in several loops.
  * @ingroup snippets
  */
-class TransposeDecomposition: public ngraph::pass::MatcherPass {
+class TransposeDecomposition: public ov::pass::MatcherPass {
 public:
-    OPENVINO_RTTI("TransposeDecomposition", "0");
+    OPENVINO_MATCHER_PASS_RTTI("snippets::pass::TransposeDecomposition");
     TransposeDecomposition();
-    static const std::set<std::vector<int>> supported_cases;
+
+    static bool is_supported_transpose(const Output<Node>& transpose_out);
+    static bool is_supported_transpose_order(const std::vector<int32_t>& order);
 };
 
 }  // namespace pass
 }  // namespace snippets
-}  // namespace ngraph
+}  // namespace ov

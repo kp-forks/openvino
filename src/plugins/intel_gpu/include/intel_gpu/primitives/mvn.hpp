@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -12,6 +12,8 @@ namespace cldnn {
 struct mvn : public primitive_base<mvn> {
     CLDNN_DECLARE_PRIMITIVE(mvn)
 
+    mvn() : primitive_base("", {}) {}
+
     /// @brief Constructs mvn primitive.
     /// @param id This primitive id.
     /// @param input Input primitive id.
@@ -24,9 +26,8 @@ struct mvn : public primitive_base<mvn> {
         const bool normalize_variance,
         const float epsilon,
         const bool eps_inside_sqrt,
-        const std::vector<int64_t>& reduction_axes,
-        const padding& output_padding = padding())
-        : primitive_base(id, {input}, {output_padding}),
+        const std::vector<int64_t>& reduction_axes)
+        : primitive_base(id, {input}),
           normalize_variance(normalize_variance),
           epsilon(epsilon),
           eps_inside_sqrt(eps_inside_sqrt),
@@ -37,7 +38,7 @@ struct mvn : public primitive_base<mvn> {
     /// @brief Epsilon for not dividing by zero while normalizing.
     float epsilon;
     /// @brief The mode of applying epsilon.
-    bool eps_inside_sqrt;
+    bool eps_inside_sqrt = false;
     /// @brief Determines axes set for normalization.
     std::vector<int64_t> reduction_axes;
 
@@ -60,6 +61,22 @@ struct mvn : public primitive_base<mvn> {
                epsilon == rhs_casted.epsilon &&
                eps_inside_sqrt == rhs_casted.eps_inside_sqrt &&
                reduction_axes == rhs_casted.reduction_axes;
+    }
+
+    void save(BinaryOutputBuffer& ob) const override {
+        primitive_base<mvn>::save(ob);
+        ob << normalize_variance;
+        ob << epsilon;
+        ob << eps_inside_sqrt;
+        ob << reduction_axes;
+    }
+
+    void load(BinaryInputBuffer& ib) override {
+        primitive_base<mvn>::load(ib);
+        ib >> normalize_variance;
+        ib >> epsilon;
+        ib >> eps_inside_sqrt;
+        ib >> reduction_axes;
     }
 
     bool across_channels() const {

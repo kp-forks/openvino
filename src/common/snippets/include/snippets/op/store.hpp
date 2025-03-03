@@ -1,13 +1,13 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #pragma once
 
-#include <ngraph/op/op.hpp>
+#include "openvino/op/op.hpp"
 #include "snippets/op/memory_access.hpp"
 
-namespace ngraph {
+namespace ov {
 namespace snippets {
 namespace op {
 
@@ -18,9 +18,9 @@ namespace op {
  *        and memory offset for storing is determined by "offset" (Default value is "0" - to store starting at start memory ptr)
  * @ingroup snippets
  */
-class Store : public MemoryAccess {
+class Store : public modifier::MemoryAccess, public ov::op::Op {
 public:
-    OPENVINO_OP("Store", "SnippetsOpset", MemoryAccess);
+    OPENVINO_OP("Store", "SnippetsOpset");
 
     Store(const Output<Node>& x, const size_t count = 1lu, const size_t offset = 0lu);
     Store() = default;
@@ -33,8 +33,9 @@ public:
 
     void validate_and_infer_types() override;
     std::shared_ptr<Node> clone_with_new_inputs(const OutputVector& new_args) const override;
+    bool visit_attributes(AttributeVisitor& visitor) override;
 };
 
 } // namespace op
 } // namespace snippets
-} // namespace ngraph
+} // namespace ov

@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -12,6 +12,8 @@ namespace cldnn {
 struct experimental_detectron_roi_feature_extractor : public primitive_base<experimental_detectron_roi_feature_extractor> {
     CLDNN_DECLARE_PRIMITIVE(experimental_detectron_roi_feature_extractor)
 
+    experimental_detectron_roi_feature_extractor() : primitive_base("", {}) {}
+
     /// @brief Constructs experimental_detectron_roi_feature_extractor primitive
     /// @param id This primitive id
     /// @param inputs Inputs for primitive id (ROIs, {pyramid levels, ...}, second_output)
@@ -24,9 +26,8 @@ struct experimental_detectron_roi_feature_extractor : public primitive_base<expe
                                                  int output_dim,
                                                  const std::vector<int64_t>& pyramid_scales,
                                                  int sampling_ratio,
-                                                 bool aligned,
-                                                 const padding& output_padding = padding()) :
-            primitive_base(id, inputs, {output_padding}),
+                                                 bool aligned) :
+            primitive_base(id, inputs),
             output_dim(output_dim),
             pooled_height(output_dim),
             pooled_width(output_dim),
@@ -64,6 +65,26 @@ struct experimental_detectron_roi_feature_extractor : public primitive_base<expe
                pyramid_scales == rhs_casted.pyramid_scales &&
                sampling_ratio == rhs_casted.sampling_ratio &&
                aligned == rhs_casted.aligned;
+    }
+
+    void save(BinaryOutputBuffer& ob) const override {
+        primitive_base<experimental_detectron_roi_feature_extractor>::save(ob);
+        ob << output_dim;
+        ob << pooled_height;
+        ob << pooled_width;
+        ob << pyramid_scales;
+        ob << sampling_ratio;
+        ob << aligned;
+    }
+
+    void load(BinaryInputBuffer& ib) override {
+        primitive_base<experimental_detectron_roi_feature_extractor>::load(ib);
+        ib >> output_dim;
+        ib >> pooled_height;
+        ib >> pooled_width;
+        ib >> pyramid_scales;
+        ib >> sampling_ratio;
+        ib >> aligned;
     }
 };
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -9,20 +9,20 @@
 #include <memory>
 
 #include <gtest/gtest.h>
-#include <low_precision/fuse_subtract_to_fake_quantize.hpp>
-#include "lpt_ngraph_functions/common/fake_quantize_on_data.hpp"
-#include "lpt_ngraph_functions/common/dequantization_operations.hpp"
+#include "low_precision/fuse_subtract_to_fake_quantize.hpp"
+#include "ov_lpt_models/common/fake_quantize_on_data.hpp"
+#include "ov_lpt_models/common/dequantization_operations.hpp"
 
-#include "common_test_utils/ngraph_test_utils.hpp"
-#include "lpt_ngraph_functions/fuse_subtract_to_fake_quantize_function.hpp"
+#include "common_test_utils/ov_test_utils.hpp"
+#include "ov_lpt_models/fuse_subtract_to_fake_quantize.hpp"
 
 #include "simple_low_precision_transformer.hpp"
 
 namespace {
 using namespace testing;
-using namespace ngraph;
-using namespace ngraph::pass;
-using namespace ngraph::builder::subgraph;
+using namespace ov;
+using namespace ov::pass;
+using namespace ov::builder::subgraph;
 
 class FuseSubtractToFakeQuantizeTransformationTestValues {
 public:
@@ -49,7 +49,7 @@ public:
 
 typedef std::tuple<
     size_t,
-    ngraph::PartialShape,
+    ov::PartialShape,
     FuseSubtractToFakeQuantizeTransformationTestValues> FuseSubtractToFakeQuantizeTransformationTestParams;
 
 class FuseSubtractToFakeQuantizeTransformation : public LayerTransformation,
@@ -57,7 +57,7 @@ class FuseSubtractToFakeQuantizeTransformation : public LayerTransformation,
 public:
     void SetUp() override {
         const size_t quantizationLevel = std::get<0>(GetParam());
-        const ngraph::PartialShape inputShape = std::get<1>(GetParam());
+        const ov::PartialShape inputShape = std::get<1>(GetParam());
         FuseSubtractToFakeQuantizeTransformationTestValues testValues = std::get<2>(GetParam());
 
         if (!testValues.actual.fakeQuantizeOnData.empty()) {
@@ -74,11 +74,11 @@ public:
         }
 
         actualFunction = testValues.actual.fakeQuantizeOnData2.empty() ?
-            ngraph::builder::subgraph::FuseSubtractToFakeQuantizeFunction::get(
+            ov::builder::subgraph::FuseSubtractToFakeQuantizeFunction::get(
                 inputShape,
                 testValues.actual.fakeQuantizeOnData,
                 testValues.actual.dequantization) :
-            ngraph::builder::subgraph::FuseSubtractToFakeQuantizeFunction::get(
+            ov::builder::subgraph::FuseSubtractToFakeQuantizeFunction::get(
                 inputShape,
                 testValues.actual.fakeQuantizeOnData,
                 testValues.actual.dequantization,
@@ -86,15 +86,15 @@ public:
                 testValues.actual.dequantization2);
 
         SimpleLowPrecisionTransformer transformer;
-        transformer.add<ngraph::pass::low_precision::FuseSubtractToFakeQuantizeTransformation, ngraph::opset1::Subtract>(testValues.params);
+        transformer.add<ov::pass::low_precision::FuseSubtractToFakeQuantizeTransformation, ov::op::v1::Subtract>(testValues.params);
         transformer.transform(actualFunction);
 
         referenceFunction = testValues.expected.fakeQuantizeOnData2.empty() ?
-            ngraph::builder::subgraph::FuseSubtractToFakeQuantizeFunction::get(
+            ov::builder::subgraph::FuseSubtractToFakeQuantizeFunction::get(
                 inputShape,
                 testValues.expected.fakeQuantizeOnData,
                 testValues.expected.dequantization) :
-            ngraph::builder::subgraph::FuseSubtractToFakeQuantizeFunction::get(
+            ov::builder::subgraph::FuseSubtractToFakeQuantizeFunction::get(
                 inputShape,
                 testValues.expected.fakeQuantizeOnData,
                 testValues.expected.dequantization,
@@ -104,7 +104,7 @@ public:
 
     static std::string getTestCaseName(testing::TestParamInfo<FuseSubtractToFakeQuantizeTransformationTestParams> obj) {
         const size_t quantizationLevel = std::get<0>(obj.param);
-        const ngraph::PartialShape inputShape = std::get<1>(obj.param);
+        const ov::PartialShape inputShape = std::get<1>(obj.param);
         FuseSubtractToFakeQuantizeTransformationTestValues testValues = std::get<2>(obj.param);
 
         if (!testValues.actual.fakeQuantizeOnData.empty()) {
@@ -143,7 +143,7 @@ TEST_P(FuseSubtractToFakeQuantizeTransformation, CompareFunctions) {
 const std::vector<size_t> quantizationLevels = { 256ul, 128ul };
 
 namespace testValues1 {
-const std::vector<ngraph::PartialShape> inputShapes = {
+const std::vector<ov::PartialShape> inputShapes = {
     {1, 4, 16, 16},
     {Dimension::dynamic(), 4, Dimension::dynamic(), Dimension::dynamic()}
 };
@@ -256,7 +256,7 @@ INSTANTIATE_TEST_SUITE_P(
 } // namespace testValues1
 
 namespace testValues2 {
-const std::vector<ngraph::PartialShape> inputShapesWithDynamicChannels = {
+const std::vector<ov::PartialShape> inputShapesWithDynamicChannels = {
     {Dimension::dynamic(), Dimension::dynamic(), Dimension::dynamic(), Dimension::dynamic()},
     PartialShape::dynamic()
 };

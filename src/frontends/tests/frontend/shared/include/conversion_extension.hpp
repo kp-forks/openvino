@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2021 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -6,8 +6,8 @@
 
 #include <gtest/gtest.h>
 
-#include <openvino/frontend/extension/conversion.hpp>
-#include <openvino/frontend/manager.hpp>
+#include "openvino/frontend/extension/conversion.hpp"
+#include "openvino/frontend/manager.hpp"
 
 struct ConversionExtensionFEParam {
     std::string m_frontEndName;

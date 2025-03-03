@@ -1,11 +1,11 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #pragma once
 #include "primitive.hpp"
 #include <vector>
-#include "intel_gpu/graph/serialization/string_serializer.hpp"
+#include "intel_gpu/graph/serialization/activation_serializer.hpp"
 
 namespace cldnn {
 
@@ -62,6 +62,9 @@ enum class activation_func {
 /// @brief activation additional params
 struct activation_additional_params {
     float a, b;
+
+    void save(BinaryOutputBuffer& ob) const { ob << a << b; }
+    void load(BinaryInputBuffer& ib) { ib >> a >> b; }
 };
 
 /// @brief Activation using rectified linear unit or parameterized rectified linear unit.
@@ -76,9 +79,8 @@ struct activation : public primitive_base<activation> {
     CLDNN_DECLARE_PRIMITIVE(activation)
 
     activation() : primitive_base("", {}),
-                   activation_function(activation_func::none) {}
-
-    DECLARE_OBJECT_TYPE_SERIALIZATION
+                   activation_function(activation_func::none),
+                   additional_params({0.f, 0.f}) {}
 
     /// @brief Constructs Relu primitive.
     /// @param id This primitive id.
@@ -88,9 +90,8 @@ struct activation : public primitive_base<activation> {
     activation(const primitive_id& id,
                const input_info& input,
                activation_func activation_function,
-               activation_additional_params additional_params = {0.f, 0.f},
-               const padding& output_padding = padding())
-        : primitive_base(id, {input}, {output_padding}),
+               activation_additional_params additional_params = {0.f, 0.f})
+        : primitive_base(id, {input}),
           activation_function(activation_function),
           additional_params(additional_params),
           additional_params_input("") {}
@@ -104,9 +105,8 @@ struct activation : public primitive_base<activation> {
     activation(const primitive_id& id,
                const input_info& input,
                const primitive_id& additional_params_input,
-               activation_func activation_function,
-               const padding& output_padding = padding())
-        : primitive_base(id, {input}, {output_padding}),
+               activation_func activation_function)
+        : primitive_base(id, {input}),
           activation_function(activation_function),
           additional_params({0, 0}),
           additional_params_input(additional_params_input) {}
@@ -144,19 +144,21 @@ struct activation : public primitive_base<activation> {
     }
 
     void save(BinaryOutputBuffer& ob) const override {
-        ob << make_data(&activation_function, sizeof(activation_func));
-        ob << make_data(&additional_params, sizeof(activation_additional_params));
+        primitive_base<activation>::save(ob);
+        ob << activation_function;
+        ob << additional_params;
         ob << additional_params_input;
     }
 
     void load(BinaryInputBuffer& ib) override {
-        ib >> make_data(&activation_function, sizeof(activation_func));
-        ib >> make_data(&additional_params, sizeof(activation_additional_params));
+        primitive_base<activation>::load(ib);
+        ib >> activation_function;
+        ib >> additional_params;
         ib >> additional_params_input;
     }
 
 protected:
-    std::vector<std::reference_wrapper<const primitive_id>> get_dependencies() const override {
+    std::vector<input_info> get_dependencies() const override {
         if (additional_params_input.empty())
             return {};
         return {additional_params_input};

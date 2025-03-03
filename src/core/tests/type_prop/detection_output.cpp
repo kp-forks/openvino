@@ -1,60 +1,66 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "ngraph/op/detection_output.hpp"
+#include "openvino/op/detection_output.hpp"
+
+#include <gtest/gtest.h>
 
 #include <memory>
 
-#include "dimension_tracker.hpp"
-#include "gtest/gtest.h"
-#include "ngraph/ngraph.hpp"
+#include "common_test_utils/test_assertions.hpp"
+#include "common_test_utils/type_prop.hpp"
 #include "openvino/util/common_util.hpp"
-#include "util/type_prop.hpp"
 
 using namespace std;
-using namespace ngraph;
+using namespace ov;
 using namespace testing;
 
 // ------------------------------ V0 ------------------------------
-std::shared_ptr<op::DetectionOutput> create_detection_output(PartialShape box_logits_shape,
-                                                             PartialShape class_preds_shape,
-                                                             PartialShape proposals_shape,
-                                                             PartialShape aux_class_preds_shape,
-                                                             PartialShape aux_box_preds_shape,
-                                                             const op::DetectionOutputAttrs& attrs,
-                                                             element::Type input_type,
-                                                             element::Type proposals_type,
-                                                             bool set_labels = false) {
-    if (set_labels) {
-        // The labels are set for all of the shapes,
-        // but the output dimension is always a product of multiplication, so labels are not preserved
-        set_shape_labels(box_logits_shape, 10);
-        set_shape_labels(class_preds_shape, 20);
-        set_shape_labels(proposals_shape, 30);
-        set_shape_labels(aux_class_preds_shape, 40);
-        set_shape_labels(aux_box_preds_shape, 50);
+static std::shared_ptr<op::v0::DetectionOutput> create_detection_output(
+    PartialShape box_logits_shape,
+    PartialShape class_preds_shape,
+    PartialShape proposals_shape,
+    PartialShape aux_class_preds_shape,
+    PartialShape aux_box_preds_shape,
+    const ov::op::v0::DetectionOutput::Attributes& attrs,
+    element::Type input_type,
+    element::Type proposals_type,
+    bool set_symbols = false) {
+    if (set_symbols) {
+        // The symbols are set for all of the shapes,
+        // but the output dimension is always a product of multiplication, so symbols are not preserved
+        set_shape_symbols(box_logits_shape);
+        set_shape_symbols(class_preds_shape);
+        set_shape_symbols(proposals_shape);
+        set_shape_symbols(aux_class_preds_shape);
+        set_shape_symbols(aux_box_preds_shape);
     }
 
-    auto box_logits = make_shared<op::Parameter>(input_type, box_logits_shape);
-    auto class_preds = make_shared<op::Parameter>(input_type, class_preds_shape);
-    auto proposals = make_shared<op::Parameter>(proposals_type, proposals_shape);
-    auto aux_class_preds = make_shared<op::Parameter>(input_type, aux_class_preds_shape);
-    auto aux_box_preds = make_shared<op::Parameter>(input_type, aux_box_preds_shape);
-    return make_shared<op::DetectionOutput>(box_logits, class_preds, proposals, aux_class_preds, aux_box_preds, attrs);
+    auto box_logits = make_shared<ov::op::v0::Parameter>(input_type, box_logits_shape);
+    auto class_preds = make_shared<ov::op::v0::Parameter>(input_type, class_preds_shape);
+    auto proposals = make_shared<ov::op::v0::Parameter>(proposals_type, proposals_shape);
+    auto aux_class_preds = make_shared<ov::op::v0::Parameter>(input_type, aux_class_preds_shape);
+    auto aux_box_preds = make_shared<ov::op::v0::Parameter>(input_type, aux_box_preds_shape);
+    return make_shared<ov::op::v0::DetectionOutput>(box_logits,
+                                                    class_preds,
+                                                    proposals,
+                                                    aux_class_preds,
+                                                    aux_box_preds,
+                                                    attrs);
 }
 
 TEST(type_prop_layers, detection_output_v0_default_ctor) {
-    auto op = make_shared<op::v8::DetectionOutput>();
+    auto op = make_shared<op::v0::DetectionOutput>();
 
     auto input_type = element::f32;
-    auto box_logits = make_shared<op::Parameter>(input_type, PartialShape{4, 20});
-    auto class_preds = make_shared<op::Parameter>(input_type, PartialShape{4, 10});
-    auto proposals = make_shared<op::Parameter>(input_type, PartialShape{4, 2, 20});
-    auto ad_class_preds = make_shared<op::Parameter>(input_type, PartialShape{4, 10});
-    auto ad_box_preds = make_shared<op::Parameter>(input_type, PartialShape{4, 20});
+    auto box_logits = make_shared<ov::op::v0::Parameter>(input_type, PartialShape{4, 20});
+    auto class_preds = make_shared<ov::op::v0::Parameter>(input_type, PartialShape{4, 10});
+    auto proposals = make_shared<ov::op::v0::Parameter>(input_type, PartialShape{4, 2, 20});
+    auto ad_class_preds = make_shared<ov::op::v0::Parameter>(input_type, PartialShape{4, 10});
+    auto ad_box_preds = make_shared<ov::op::v0::Parameter>(input_type, PartialShape{4, 20});
 
-    op::DetectionOutputAttrs attrs;
+    ov::op::v0::DetectionOutput::Attributes attrs;
     attrs.keep_top_k = {-1};
     attrs.top_k = 7;
     attrs.num_classes = 2;
@@ -79,7 +85,7 @@ TEST(type_prop_layers, detection_output_v0_default_ctor) {
 }
 
 TEST(type_prop_layers, detection_output_basic) {
-    op::DetectionOutputAttrs attrs;
+    ov::op::v0::DetectionOutput::Attributes attrs;
     attrs.keep_top_k = {200};
     attrs.num_classes = 2;
     attrs.normalized = true;
@@ -95,8 +101,8 @@ TEST(type_prop_layers, detection_output_basic) {
     EXPECT_EQ(op->get_element_type(), element::f32);
 }
 
-TEST(type_prop_layers, detection_output_interval_labeled_keep_top_k) {
-    op::DetectionOutputAttrs attrs;
+TEST(type_prop_layers, detection_output_interval_symboled_keep_top_k) {
+    ov::op::v0::DetectionOutput::Attributes attrs;
     attrs.keep_top_k = {60};
     attrs.num_classes = 3;
     attrs.normalized = true;
@@ -108,16 +114,16 @@ TEST(type_prop_layers, detection_output_interval_labeled_keep_top_k) {
                                       attrs,
                                       element::f32,
                                       element::f32,
-                                      true);  // set labels
+                                      true);  // set symbols
 
     // [1, 1, N * keep_top_k[0], 7]
     EXPECT_EQ(op->get_output_partial_shape(0), (PartialShape{1, 1, {120, 240}, 7}));
-    EXPECT_THAT(get_shape_labels(op->get_output_partial_shape(0)), Each(ov::no_label));
+    EXPECT_THAT(get_shape_symbols(op->get_output_partial_shape(0)), Each(nullptr));
     EXPECT_EQ(op->get_element_type(), element::f32);
 }
 
-TEST(type_prop_layers, detection_output_interval_labeled_top_k) {
-    op::DetectionOutputAttrs attrs;
+TEST(type_prop_layers, detection_output_interval_symboled_top_k) {
+    ov::op::v0::DetectionOutput::Attributes attrs;
     attrs.keep_top_k = {-1};
     attrs.top_k = 80;
     attrs.num_classes = 3;
@@ -130,16 +136,16 @@ TEST(type_prop_layers, detection_output_interval_labeled_top_k) {
                                       attrs,
                                       element::f32,
                                       element::f32,
-                                      true);  // set labels
+                                      true);  // set symbols
 
     // [1, 1, N * top_k * num_classes, 7]
     EXPECT_EQ(op->get_output_partial_shape(0), (PartialShape{1, 1, {480, 960}, 7}));
-    EXPECT_THAT(get_shape_labels(op->get_output_partial_shape(0)), Each(ov::no_label));
+    EXPECT_THAT(get_shape_symbols(op->get_output_partial_shape(0)), Each(nullptr));
     EXPECT_EQ(op->get_element_type(), element::f32);
 }
 
-TEST(type_prop_layers, detection_output_interval_labeled_negative_both_topk) {
-    op::DetectionOutputAttrs attrs;
+TEST(type_prop_layers, detection_output_interval_symboled_negative_both_topk) {
+    ov::op::v0::DetectionOutput::Attributes attrs;
     attrs.keep_top_k = {-1};
     attrs.top_k = -1;
     attrs.num_classes = 3;
@@ -152,16 +158,16 @@ TEST(type_prop_layers, detection_output_interval_labeled_negative_both_topk) {
                                       attrs,
                                       element::f32,
                                       element::f32,
-                                      true);  // set labels
+                                      true);  // set symbols
 
     // [1, 1, N * num_classes * num_prior_boxes, 7]  // num_prior_boxex = 5
     EXPECT_EQ(op->get_output_partial_shape(0), (PartialShape{1, 1, {30, 60}, 7}));
-    EXPECT_THAT(get_shape_labels(op->get_output_partial_shape(0)), Each(ov::no_label));
+    EXPECT_THAT(get_shape_symbols(op->get_output_partial_shape(0)), Each(nullptr));
     EXPECT_EQ(op->get_element_type(), element::f32);
 }
 
 TEST(type_prop_layers, detection_output_v0_f16) {
-    op::DetectionOutputAttrs attrs;
+    ov::op::v0::DetectionOutput::Attributes attrs;
     attrs.keep_top_k = {200};
     attrs.num_classes = 2;
     attrs.normalized = true;
@@ -178,7 +184,7 @@ TEST(type_prop_layers, detection_output_v0_f16) {
 }
 
 TEST(type_prop_layers, detection_f16_with_proposals_f32) {
-    op::DetectionOutputAttrs attrs;
+    ov::op::v0::DetectionOutput::Attributes attrs;
     attrs.keep_top_k = {200};
     attrs.num_classes = 2;
     attrs.normalized = true;
@@ -195,7 +201,7 @@ TEST(type_prop_layers, detection_f16_with_proposals_f32) {
 }
 
 TEST(type_prop_layers, detection_output_v0_not_normalized) {
-    op::DetectionOutputAttrs attrs;
+    ov::op::v0::DetectionOutput::Attributes attrs;
     attrs.keep_top_k = {200};
     attrs.num_classes = 2;
     attrs.normalized = false;
@@ -212,7 +218,7 @@ TEST(type_prop_layers, detection_output_v0_not_normalized) {
 }
 
 TEST(type_prop_layers, detection_output_v0_negative_keep_top_k) {
-    op::DetectionOutputAttrs attrs;
+    ov::op::v0::DetectionOutput::Attributes attrs;
     attrs.keep_top_k = {-1};
     attrs.top_k = -1;
     attrs.normalized = true;
@@ -230,7 +236,7 @@ TEST(type_prop_layers, detection_output_v0_negative_keep_top_k) {
 }
 
 TEST(type_prop_layers, detection_output_v0_no_share_location) {
-    op::DetectionOutputAttrs attrs;
+    ov::op::v0::DetectionOutput::Attributes attrs;
     attrs.keep_top_k = {-1};
     attrs.top_k = -1;
     attrs.normalized = true;
@@ -249,7 +255,7 @@ TEST(type_prop_layers, detection_output_v0_no_share_location) {
 }
 
 TEST(type_prop_layers, detection_output_v0_calculated_num_prior_boxes) {
-    op::DetectionOutputAttrs attrs;
+    ov::op::v0::DetectionOutput::Attributes attrs;
     attrs.keep_top_k = {-1};
     attrs.top_k = -1;
     attrs.normalized = true;
@@ -268,7 +274,7 @@ TEST(type_prop_layers, detection_output_v0_calculated_num_prior_boxes) {
 }
 
 TEST(type_prop_layers, detection_output_v0_top_k) {
-    op::DetectionOutputAttrs attrs;
+    ov::op::v0::DetectionOutput::Attributes attrs;
     attrs.keep_top_k = {-1};
     attrs.top_k = 7;
     attrs.normalized = true;
@@ -287,7 +293,7 @@ TEST(type_prop_layers, detection_output_v0_top_k) {
 
 TEST(type_prop_layers, detection_output_v0_all_dynamic_shapes) {
     PartialShape dyn_shape = PartialShape::dynamic();
-    op::DetectionOutputAttrs attrs;
+    ov::op::v0::DetectionOutput::Attributes attrs;
     attrs.keep_top_k = {-1};
     attrs.num_classes = 1;
     auto op = create_detection_output(dyn_shape,
@@ -303,7 +309,7 @@ TEST(type_prop_layers, detection_output_v0_all_dynamic_shapes) {
 }
 
 TEST(type_prop_layers, detection_output_v0_dynamic_batch) {
-    op::DetectionOutputAttrs attrs;
+    ov::op::v0::DetectionOutput::Attributes attrs;
     attrs.keep_top_k = {200};
     attrs.num_classes = 2;
     attrs.normalized = true;
@@ -319,24 +325,28 @@ TEST(type_prop_layers, detection_output_v0_dynamic_batch) {
     EXPECT_EQ(op->get_element_type(), element::f32);
 }
 
-void detection_output_invalid_data_type_test(element::Type box_logits_et,
-                                             element::Type class_preds_et,
-                                             element::Type proposals_et,
-                                             element::Type aux_class_preds_et,
-                                             element::Type aux_box_preds_et,
-                                             const std::string& expected_msg) {
+static void detection_output_invalid_data_type_test(element::Type box_logits_et,
+                                                    element::Type class_preds_et,
+                                                    element::Type proposals_et,
+                                                    element::Type aux_class_preds_et,
+                                                    element::Type aux_box_preds_et,
+                                                    const std::string& expected_msg) {
     try {
-        auto box_logits = make_shared<op::Parameter>(box_logits_et, Shape{4, 20});
-        auto class_preds = make_shared<op::Parameter>(class_preds_et, Shape{4, 10});
-        auto proposals = make_shared<op::Parameter>(proposals_et, Shape{4, 2, 20});
-        auto aux_class_preds = make_shared<op::Parameter>(aux_class_preds_et, Shape{4, 10});
-        auto aux_box_preds = make_shared<op::Parameter>(aux_box_preds_et, Shape{4, 20});
-        op::DetectionOutputAttrs attrs;
+        auto box_logits = make_shared<ov::op::v0::Parameter>(box_logits_et, Shape{4, 20});
+        auto class_preds = make_shared<ov::op::v0::Parameter>(class_preds_et, Shape{4, 10});
+        auto proposals = make_shared<ov::op::v0::Parameter>(proposals_et, Shape{4, 2, 20});
+        auto aux_class_preds = make_shared<ov::op::v0::Parameter>(aux_class_preds_et, Shape{4, 10});
+        auto aux_box_preds = make_shared<ov::op::v0::Parameter>(aux_box_preds_et, Shape{4, 20});
+        ov::op::v0::DetectionOutput::Attributes attrs;
         attrs.keep_top_k = {200};
         attrs.num_classes = 2;
         attrs.normalized = true;
-        auto op =
-            make_shared<op::DetectionOutput>(box_logits, class_preds, proposals, aux_class_preds, aux_box_preds, attrs);
+        auto op = make_shared<ov::op::v0::DetectionOutput>(box_logits,
+                                                           class_preds,
+                                                           proposals,
+                                                           aux_class_preds,
+                                                           aux_box_preds,
+                                                           attrs);
         FAIL() << "Exception expected";
     } catch (const NodeValidationFailure& error) {
         EXPECT_HAS_SUBSTRING(error.what(), expected_msg);
@@ -384,7 +394,7 @@ TEST(type_prop_layers, detection_output_v0_invalid_data_type) {
 TEST(type_prop_layers, detection_output_v0_mismatched_batch_size) {
     {
         try {
-            op::DetectionOutputAttrs attrs;
+            ov::op::v0::DetectionOutput::Attributes attrs;
             attrs.keep_top_k = {200};
             attrs.num_classes = 2;
             attrs.normalized = true;
@@ -406,7 +416,7 @@ TEST(type_prop_layers, detection_output_v0_mismatched_batch_size) {
     }
     {
         try {
-            op::DetectionOutputAttrs attrs;
+            ov::op::v0::DetectionOutput::Attributes attrs;
             attrs.keep_top_k = {200};
             attrs.num_classes = 2;
             attrs.normalized = true;
@@ -432,7 +442,7 @@ TEST(type_prop_layers, detection_output_v0_mismatched_batch_size) {
 TEST(type_prop_layers, detection_output_v0_invalid_ranks) {
     {
         try {
-            op::DetectionOutputAttrs attrs;
+            ov::op::v0::DetectionOutput::Attributes attrs;
             attrs.keep_top_k = {200};
             attrs.num_classes = 2;
             attrs.normalized = true;
@@ -453,7 +463,7 @@ TEST(type_prop_layers, detection_output_v0_invalid_ranks) {
     }
     {
         try {
-            op::DetectionOutputAttrs attrs;
+            ov::op::v0::DetectionOutput::Attributes attrs;
             attrs.keep_top_k = {200};
             attrs.num_classes = 2;
             attrs.normalized = true;
@@ -474,7 +484,7 @@ TEST(type_prop_layers, detection_output_v0_invalid_ranks) {
     }
     {
         try {
-            op::DetectionOutputAttrs attrs;
+            ov::op::v0::DetectionOutput::Attributes attrs;
             attrs.keep_top_k = {200};
             attrs.num_classes = 2;
             attrs.normalized = true;
@@ -499,7 +509,7 @@ TEST(type_prop_layers, detection_output_v0_invalid_box_logits_shape) {
     // share_location = true
     {
         try {
-            op::DetectionOutputAttrs attrs;
+            ov::op::v0::DetectionOutput::Attributes attrs;
             attrs.keep_top_k = {-1};
             attrs.num_classes = 3;
             attrs.share_location = true;
@@ -525,7 +535,7 @@ TEST(type_prop_layers, detection_output_v0_invalid_box_logits_shape) {
     // share_location = false
     {
         try {
-            op::DetectionOutputAttrs attrs;
+            ov::op::v0::DetectionOutput::Attributes attrs;
             attrs.keep_top_k = {-1};
             attrs.num_classes = 3;
             attrs.share_location = false;
@@ -552,7 +562,7 @@ TEST(type_prop_layers, detection_output_v0_invalid_box_logits_shape) {
 
 TEST(type_prop_layers, detection_output_v0_invalid_class_preds_shape) {
     try {
-        op::DetectionOutputAttrs attrs;
+        ov::op::v0::DetectionOutput::Attributes attrs;
         attrs.keep_top_k = {-1};
         attrs.num_classes = 3;
         auto op = create_detection_output(Shape{4, 12},
@@ -577,7 +587,7 @@ TEST(type_prop_layers, detection_output_v0_invalid_proposals_shape) {
     // variance_encoded_in_target = false
     {
         try {
-            op::DetectionOutputAttrs attrs;
+            ov::op::v0::DetectionOutput::Attributes attrs;
             attrs.keep_top_k = {-1};
             attrs.num_classes = 3;
             attrs.share_location = true;
@@ -603,7 +613,7 @@ TEST(type_prop_layers, detection_output_v0_invalid_proposals_shape) {
     // variance_encoded_in_target = true
     {
         try {
-            op::DetectionOutputAttrs attrs;
+            ov::op::v0::DetectionOutput::Attributes attrs;
             attrs.keep_top_k = {-1};
             attrs.num_classes = 3;
             attrs.share_location = true;
@@ -629,7 +639,7 @@ TEST(type_prop_layers, detection_output_v0_invalid_proposals_shape) {
     // normalized = false
     {
         try {
-            op::DetectionOutputAttrs attrs;
+            ov::op::v0::DetectionOutput::Attributes attrs;
             attrs.keep_top_k = {-1};
             attrs.num_classes = 3;
             attrs.share_location = true;
@@ -655,7 +665,7 @@ TEST(type_prop_layers, detection_output_v0_invalid_proposals_shape) {
     // normalized = true
     {
         try {
-            op::DetectionOutputAttrs attrs;
+            ov::op::v0::DetectionOutput::Attributes attrs;
             attrs.keep_top_k = {-1};
             attrs.num_classes = 3;
             attrs.share_location = true;
@@ -684,7 +694,7 @@ TEST(type_prop_layers, detection_output_v0_invalid_aux_class_preds) {
     // invalid batch size
     {
         try {
-            op::DetectionOutputAttrs attrs;
+            ov::op::v0::DetectionOutput::Attributes attrs;
             attrs.keep_top_k = {-1};
             attrs.num_classes = 3;
             attrs.share_location = true;
@@ -710,7 +720,7 @@ TEST(type_prop_layers, detection_output_v0_invalid_aux_class_preds) {
     // invalid 2nd dimension
     {
         try {
-            op::DetectionOutputAttrs attrs;
+            ov::op::v0::DetectionOutput::Attributes attrs;
             attrs.keep_top_k = {-1};
             attrs.num_classes = 3;
             attrs.share_location = true;
@@ -740,7 +750,7 @@ TEST(type_prop_layers, detection_output_v0_invalid_aux_box_preds) {
     // invalid batch size
     {
         try {
-            op::DetectionOutputAttrs attrs;
+            ov::op::v0::DetectionOutput::Attributes attrs;
             attrs.keep_top_k = {-1};
             attrs.num_classes = 3;
             attrs.share_location = true;
@@ -766,7 +776,7 @@ TEST(type_prop_layers, detection_output_v0_invalid_aux_box_preds) {
     // invalid 2nd dimension
     {
         try {
-            op::DetectionOutputAttrs attrs;
+            ov::op::v0::DetectionOutput::Attributes attrs;
             attrs.keep_top_k = {-1};
             attrs.num_classes = 3;
             attrs.share_location = true;
@@ -798,18 +808,18 @@ std::shared_ptr<op::v8::DetectionOutput> create_detection_output_v8(PartialShape
                                                                     PartialShape proposals_shape,
                                                                     const op::v8::DetectionOutput::Attributes& attrs,
                                                                     element::Type input_type,
-                                                                    bool set_labels = false) {
-    if (set_labels) {
-        // The labels are set for all of the shapes,
-        // but the output dimension is always a product of multiplication, so labels are not preserved
-        set_shape_labels(box_logits_shape, 10);
-        set_shape_labels(class_preds_shape, 20);
-        set_shape_labels(proposals_shape, 30);
+                                                                    bool set_symbols = false) {
+    if (set_symbols) {
+        // The symbols are set for all of the shapes,
+        // but the output dimension is always a product of multiplication, so symbols are not preserved
+        set_shape_symbols(box_logits_shape);
+        set_shape_symbols(class_preds_shape);
+        set_shape_symbols(proposals_shape);
     }
 
-    auto box_logits = make_shared<op::Parameter>(input_type, box_logits_shape);
-    auto class_preds = make_shared<op::Parameter>(input_type, class_preds_shape);
-    auto proposals = make_shared<op::Parameter>(input_type, proposals_shape);
+    auto box_logits = make_shared<ov::op::v0::Parameter>(input_type, box_logits_shape);
+    auto class_preds = make_shared<ov::op::v0::Parameter>(input_type, class_preds_shape);
+    auto proposals = make_shared<ov::op::v0::Parameter>(input_type, proposals_shape);
     return make_shared<op::v8::DetectionOutput>(box_logits, class_preds, proposals, attrs);
 }
 
@@ -820,22 +830,22 @@ std::shared_ptr<op::v8::DetectionOutput> create_detection_output2_v8(PartialShap
                                                                      PartialShape aux_box_preds_shape,
                                                                      const op::v8::DetectionOutput::Attributes& attrs,
                                                                      element::Type input_type,
-                                                                     bool set_labels = false) {
-    if (set_labels) {
-        // The labels are set for all of the shapes,
-        // but the output dimension is always a product of multiplication, so labels are not preserved
-        set_shape_labels(box_logits_shape, 10);
-        set_shape_labels(class_preds_shape, 20);
-        set_shape_labels(proposals_shape, 30);
-        set_shape_labels(aux_class_preds_shape, 40);
-        set_shape_labels(aux_box_preds_shape, 50);
+                                                                     bool set_symbols = false) {
+    if (set_symbols) {
+        // The symbols are set for all of the shapes,
+        // but the output dimension is always a product of multiplication, so symbols are not preserved
+        set_shape_symbols(box_logits_shape);
+        set_shape_symbols(class_preds_shape);
+        set_shape_symbols(proposals_shape);
+        set_shape_symbols(aux_class_preds_shape);
+        set_shape_symbols(aux_box_preds_shape);
     }
 
-    auto box_logits = make_shared<op::Parameter>(input_type, box_logits_shape);
-    auto class_preds = make_shared<op::Parameter>(input_type, class_preds_shape);
-    auto proposals = make_shared<op::Parameter>(input_type, proposals_shape);
-    auto aux_class_preds = make_shared<op::Parameter>(input_type, aux_class_preds_shape);
-    auto aux_box_preds = make_shared<op::Parameter>(input_type, aux_box_preds_shape);
+    auto box_logits = make_shared<ov::op::v0::Parameter>(input_type, box_logits_shape);
+    auto class_preds = make_shared<ov::op::v0::Parameter>(input_type, class_preds_shape);
+    auto proposals = make_shared<ov::op::v0::Parameter>(input_type, proposals_shape);
+    auto aux_class_preds = make_shared<ov::op::v0::Parameter>(input_type, aux_class_preds_shape);
+    auto aux_box_preds = make_shared<ov::op::v0::Parameter>(input_type, aux_box_preds_shape);
     return make_shared<op::v8::DetectionOutput>(box_logits,
                                                 class_preds,
                                                 proposals,
@@ -1040,7 +1050,7 @@ TEST(type_prop_layers, detection_output_v8_intervals_3in) {
         EXPECT_EQ(op->get_output_partial_shape(0), output_shape_reference)
             << "Failed for keep_top_k=" << ov::util::vector_to_string(attrs.keep_top_k) << " top_k=" << attrs.top_k
             << " and variance_encoded_in_target=" << attrs.variance_encoded_in_target << std::endl;
-        EXPECT_THAT(get_shape_labels(op->get_output_partial_shape(0)), Each(ov::no_label));
+        EXPECT_THAT(get_shape_symbols(op->get_output_partial_shape(0)), Each(nullptr));
         EXPECT_EQ(op->get_element_type(), element::f32);
     }
 }
@@ -1070,7 +1080,7 @@ TEST(type_prop_layers, detection_output_v8_interval_batch_3in) {
         EXPECT_EQ(op->get_output_partial_shape(0), output_shape_reference)
             << "Failed for keep_top_k=" << ov::util::vector_to_string(attrs.keep_top_k) << " top_k=" << attrs.top_k
             << " and variance_encoded_in_target=" << attrs.variance_encoded_in_target << std::endl;
-        EXPECT_THAT(get_shape_labels(op->get_output_partial_shape(0)), Each(ov::no_label));
+        EXPECT_THAT(get_shape_symbols(op->get_output_partial_shape(0)), Each(nullptr));
         EXPECT_EQ(op->get_element_type(), element::f32);
     }
 }
@@ -1101,7 +1111,7 @@ TEST(type_prop_layers, detection_output_v8_interval_batch_5in) {
         EXPECT_EQ(op->get_output_partial_shape(0), output_shape_reference)
             << "Failed for keep_top_k=" << ov::util::vector_to_string(attrs.keep_top_k) << " top_k=" << attrs.top_k
             << " and variance_encoded_in_target=" << attrs.variance_encoded_in_target << std::endl;
-        EXPECT_THAT(get_shape_labels(op->get_output_partial_shape(0)), Each(ov::no_label));
+        EXPECT_THAT(get_shape_symbols(op->get_output_partial_shape(0)), Each(nullptr));
         EXPECT_EQ(op->get_element_type(), element::f32);
     }
 }
@@ -1127,11 +1137,11 @@ TEST(type_prop_layers, detection_output_v8_default_ctor) {
             compute_reference_output_shape(attrs.keep_top_k, attrs.top_k, N, num_classes, num_prior_boxes);
 
         auto input_type = element::f32;
-        auto box_logits = make_shared<op::Parameter>(input_type, box_logits_shape);
-        auto class_preds = make_shared<op::Parameter>(input_type, class_preds_shape);
-        auto proposals = make_shared<op::Parameter>(input_type, proposals_shape);
-        auto ad_class_preds = make_shared<op::Parameter>(input_type, ad_class_preds_shape);
-        auto ad_box_preds = make_shared<op::Parameter>(input_type, box_logits_shape);
+        auto box_logits = make_shared<ov::op::v0::Parameter>(input_type, box_logits_shape);
+        auto class_preds = make_shared<ov::op::v0::Parameter>(input_type, class_preds_shape);
+        auto proposals = make_shared<ov::op::v0::Parameter>(input_type, proposals_shape);
+        auto ad_class_preds = make_shared<ov::op::v0::Parameter>(input_type, ad_class_preds_shape);
+        auto ad_box_preds = make_shared<ov::op::v0::Parameter>(input_type, box_logits_shape);
 
         auto op = make_shared<op::v8::DetectionOutput>();
         op->set_attrs(attrs);
@@ -1142,4 +1152,118 @@ TEST(type_prop_layers, detection_output_v8_default_ctor) {
         EXPECT_EQ(op->get_output_partial_shape(0), output_shape_reference);
         EXPECT_EQ(op->get_element_type(), element::f32);
     }
+}
+
+TEST(type_prop_layers, detection_output_v8_incompatible_num_prior_boxes_normalized_true_shareloc_true) {
+    ov::op::v0::DetectionOutput::Attributes attrs;
+    attrs.keep_top_k = {-1};
+    attrs.normalized = true;      // If true, prior_box_size = 4, otherwise prior_box_size = 5
+    attrs.share_location = true;  // If true, num_loc_classes = 1, otherwise num_loc_classes = num_classes
+
+    OV_EXPECT_THROW(auto op = create_detection_output_v8(
+                        Shape{4, 6 * 1 * 4},  // [N, num_prior_boxes * num_loc_classes * 4]
+                        Shape{4, 8 * 16},     // [N, num_prior_boxes * num_classes]
+                        Shape{4, 2, 8 * 4},   // [priors_batch_size, 2, num_prior_boxes * prior_box_size]`
+                        attrs,
+                        element::f32),
+                    NodeValidationFailure,
+                    HasSubstr("The second dimension of the first input (box logits) is not compatible. Current value: "
+                              "24, expected value: 32"));
+}
+
+TEST(type_prop_layers, detection_output_v8_incompatible_num_prior_boxes_normalized_false_shareloc_true) {
+    ov::op::v0::DetectionOutput::Attributes attrs;
+    attrs.keep_top_k = {-1};
+    attrs.normalized = false;     // If true, prior_box_size = 4, otherwise prior_box_size = 5
+    attrs.share_location = true;  // If true, num_loc_classes = 1, otherwise num_loc_classes = num_classes
+
+    OV_EXPECT_THROW(auto op = create_detection_output_v8(
+                        Shape{4, 6 * 1 * 4},  // [N, num_prior_boxes * num_loc_classes * 4]
+                        Shape{4, 8 * 16},     // [N, num_prior_boxes * num_classes]
+                        Shape{4, 2, 8 * 5},   // [priors_batch_size, 2, num_prior_boxes * prior_box_size]`
+                        attrs,
+                        element::f32),
+                    NodeValidationFailure,
+                    HasSubstr("The second dimension of the first input (box logits) is not compatible. Current value: "
+                              "24, expected value: 32"));
+}
+
+TEST(type_prop_layers, detection_output_v8_incompatible_num_prior_boxes_normalized_false_shareloc_false) {
+    ov::op::v0::DetectionOutput::Attributes attrs;
+    attrs.keep_top_k = {-1};
+    attrs.normalized = false;      // If true, prior_box_size = 4, otherwise prior_box_size = 5
+    attrs.share_location = false;  // If true, num_loc_classes = 1, otherwise num_loc_classes = num_classes
+
+    OV_EXPECT_THROW(auto op = create_detection_output_v8(
+                        Shape{4, 6 * 16 * 4},  // [N, num_prior_boxes * num_loc_classes * 4]
+                        Shape{4, 8 * 16},      // [N, num_prior_boxes * num_classes]
+                        Shape{4, 2, 8 * 5},    // [priors_batch_size, 2, num_prior_boxes * prior_box_size]`
+                        attrs,
+                        element::f32),
+                    NodeValidationFailure,
+                    HasSubstr("The second dimension of the first input (box logits) is not compatible. Current value: "
+                              "384, expected value: 512"));
+}
+
+TEST(type_prop_layers, detection_output_v8_incompatible_num_prior_boxes_normalized_true_shareloc_false) {
+    ov::op::v0::DetectionOutput::Attributes attrs;
+    attrs.keep_top_k = {-1};
+    attrs.normalized = true;       // If true, prior_box_size = 4, otherwise prior_box_size = 5
+    attrs.share_location = false;  // If true, num_loc_classes = 1, otherwise num_loc_classes = num_classes
+    OV_EXPECT_THROW(auto op = create_detection_output_v8(
+                        Shape{4, 6 * 16 * 4},  // [N, num_prior_boxes * num_loc_classes * 4]
+                        Shape{4, 8 * 16},      // [N, num_prior_boxes * num_classes]
+                        Shape{4, 2, 8 * 4},    // [priors_batch_size, 2, num_prior_boxes * prior_box_size]`
+                        attrs,
+                        element::f32),
+                    NodeValidationFailure,
+                    HasSubstr("The second dimension of the first input (box logits) is not compatible. Current value: "
+                              "384, expected value: 512"));
+}
+
+TEST(type_prop_layers, detection_output_v8_incompatible_dynamic_num_prior_boxes_normalized_true_shareloc_true) {
+    ov::op::v0::DetectionOutput::Attributes attrs;
+    attrs.keep_top_k = {-1};
+    attrs.normalized = true;      // If true, prior_box_size = 4, otherwise prior_box_size = 5
+    attrs.share_location = true;  // If true, num_loc_classes = 1, otherwise num_loc_classes = num_classes
+
+    OV_EXPECT_THROW(auto op = create_detection_output_v8(
+                        PartialShape{4, {16, 24}},  // [N, num_prior_boxes * num_loc_classes * 4]
+                        PartialShape{4, 8 * 16},    // [N, num_prior_boxes * num_classes]
+                        PartialShape{4, 2, 8 * 4},  // [priors_batch_size, 2, num_prior_boxes * prior_box_size]`
+                        attrs,
+                        element::f32),
+                    NodeValidationFailure,
+                    HasSubstr("The second dimension of the first input (box logits) is not compatible. Current value: "
+                              "16..24, expected value: 32"));
+}
+
+TEST(type_prop_layers, detection_output_v8_dynamic_range_num_prior_boxes_normalized_true_shareloc_true) {
+    ov::op::v0::DetectionOutput::Attributes attrs;
+    attrs.keep_top_k = {-1};
+    attrs.normalized = true;      // If true, prior_box_size = 4, otherwise prior_box_size = 5
+    attrs.share_location = true;  // If true, num_loc_classes = 1, otherwise num_loc_classes = num_classes
+    auto op = create_detection_output_v8(
+        PartialShape{4, {16, 32}},  // [N, num_prior_boxes * num_loc_classes * 4]
+        PartialShape{4, 8 * 16},    // [N, num_prior_boxes * num_classes]
+        PartialShape{4, 2, 8 * 4},  // [priors_batch_size, 2, num_prior_boxes * prior_box_size]`
+        attrs,
+        element::f32);
+    EXPECT_EQ(op->get_output_partial_shape(0), (PartialShape{1, 1, 4 * 8 * 16, 7}));
+    EXPECT_EQ(op->get_element_type(), element::f32);
+}
+
+TEST(type_prop_layers, detection_output_v8_dynamic_num_prior_boxes_normalized_true_shareloc_true) {
+    ov::op::v0::DetectionOutput::Attributes attrs;
+    attrs.keep_top_k = {-1};
+    attrs.normalized = true;      // If true, prior_box_size = 4, otherwise prior_box_size = 5
+    attrs.share_location = true;  // If true, num_loc_classes = 1, otherwise num_loc_classes = num_classes
+    auto op = create_detection_output_v8(
+        PartialShape{4, -1},        // [N, num_prior_boxes * num_loc_classes * 4]
+        PartialShape{4, 8 * 16},    // [N, num_prior_boxes * num_classes]
+        PartialShape{4, 2, 8 * 4},  // [priors_batch_size, 2, num_prior_boxes * prior_box_size]`
+        attrs,
+        element::f32);
+    EXPECT_EQ(op->get_output_partial_shape(0), (PartialShape{1, 1, 4 * 8 * 16, 7}));
+    EXPECT_EQ(op->get_element_type(), element::f32);
 }

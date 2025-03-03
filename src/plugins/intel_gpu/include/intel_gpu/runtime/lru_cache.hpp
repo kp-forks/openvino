@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -208,7 +208,7 @@ public:
     }
 
     void set_remove_item_callback(FuncRemoveItem callback) {
-        _remove_popped_item = callback;
+        _remove_popped_item = std::move(callback);
     }
 
 private:

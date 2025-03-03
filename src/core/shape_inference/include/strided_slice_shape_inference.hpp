@@ -1,12 +1,13 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #pragma once
 
 #include <array>
-#include <openvino/op/strided_slice.hpp>
+#include <optional>
 
+#include "openvino/op/strided_slice.hpp"
 #include "slice_shape_inference_utils.hpp"
 #include "utils.hpp"
 
@@ -14,15 +15,14 @@ namespace ov {
 namespace op {
 namespace v1 {
 
-template <class T>
-void shape_infer(const StridedSlice* op,
-                 const std::vector<T>& input_shapes,
-                 std::vector<T>& output_shapes,
-                 const std::map<size_t, std::shared_ptr<ngraph::runtime::HostTensor>>& constant_data = {}) {
-    using DimType = typename std::iterator_traits<typename T::iterator>::value_type;
+template <class T, class TRShape = result_shape_t<T>>
+std::vector<TRShape> shape_infer(const StridedSlice* op,
+                                 const std::vector<T>& input_shapes,
+                                 const ITensorAccessor& ta = make_tensor_accessor()) {
+    using DimType = typename T::value_type;
     static constexpr std::array<char const*, 3> shape_names{"Begin", "End", "Strides"};
 
-    NODE_VALIDATION_CHECK(op, (input_shapes.size() == 3 || input_shapes.size() == 4) && output_shapes.size() == 1);
+    NODE_VALIDATION_CHECK(op, (input_shapes.size() == 3 || input_shapes.size() == 4));
 
     const auto& input_shape = input_shapes[0];
 
@@ -38,12 +38,12 @@ void shape_infer(const StridedSlice* op,
 
     const auto& begin_shape = input_shapes[1];
     const auto& end_shape = input_shapes[2];
-
+    auto output_shapes = std::vector<TRShape>(1);
     // it is not possible to define output shape if input data shape rank is undefined
     // even the lengths of begin, end, or strides are defined
     if (input_shape.rank().is_dynamic()) {
         output_shapes[0] = ov::PartialShape::dynamic();
-        return;
+        return output_shapes;
     }
     auto input_rank = input_shape.size();
 
@@ -59,15 +59,15 @@ void shape_infer(const StridedSlice* op,
     };
 
     // compute constant values of begin, end, and strides if possible
-    const auto begin = slice::get_input_bounds<T>(op, 1, constant_data);
-    const auto end = slice::get_input_bounds<T>(op, 2, constant_data);
+    const auto begin = get_input_bounds<TRShape, int64_t>(op, 1, ta);
+    const auto end = get_input_bounds<TRShape, int64_t>(op, 2, ta);
 
-    std::unique_ptr<std::vector<int64_t>> strides;
+    std::optional<std::vector<int64_t>> strides;
     if (input_shapes.size() > 3) {
-        strides = get_input_const_data_as<T, int64_t>(op, 3, constant_data);
+        strides = get_input_const_data_as<TRShape, int64_t>(op, 3, ta);
     } else if (begin) {
         // generate default strides
-        strides.reset(new std::vector<int64_t>(begin->size(), 1));
+        strides.emplace(begin->size(), 1);
     }
 
     // compute and check a number of axes for which begin, end, and strides are defined
@@ -90,7 +90,7 @@ void shape_infer(const StridedSlice* op,
     // if number of axes is undefined we cannot say about output rank
     if (number_axes < 0) {
         output_shapes[0] = ov::PartialShape::dynamic();
-        return;
+        return output_shapes;
     }
 
     // collect indices of axes by which the shape needs to be changed
@@ -109,10 +109,15 @@ void shape_infer(const StridedSlice* op,
     AxisSet begin_mask = convert_mask_to_axis_set(op->get_begin_mask());
     AxisSet end_mask = convert_mask_to_axis_set(op->get_end_mask());
     AxisSet shrink_axis_mask = convert_mask_to_axis_set(op->get_shrink_axis_mask());
-    NODE_VALIDATION_CHECK(op,
-                          input_rank + new_axis_mask.size() >= static_cast<size_t>(number_axes),
-                          "Input rank plus number of new axis has to be at least the size of Lower "
-                          "and Upper bounds vector.");
+
+    // If ellipsis_mask is set, Lower and Upper bownd vectors can be less than input rank + number of new axes,
+    // because ellipsis adds missing dimensions, which can be missing in begin or end inputs
+    if (!ellipsis_mask.size()) {
+        NODE_VALIDATION_CHECK(op,
+                              input_rank + new_axis_mask.size() >= static_cast<size_t>(number_axes),
+                              "Input rank plus number of new axis has to be at least the size of Lower "
+                              "and Upper bounds vector.");
+    }
 
     auto& out = output_shapes.front();
     out.resize(0);
@@ -162,8 +167,10 @@ void shape_infer(const StridedSlice* op,
 
                 constexpr int64_t inf_bound = -1;
                 const auto is_reverse_stride = stride < 0;
-                const int64_t norm_dim = (input_dim.get_max_length() == inf_bound) ? std::numeric_limits<int64_t>::max()
-                                                                                   : input_dim.get_max_length();
+                const int64_t norm_dim =
+                    (static_cast<int64_t>(input_dim.get_max_length()) == static_cast<int64_t>(inf_bound))
+                        ? std::numeric_limits<int64_t>::max()
+                        : input_dim.get_max_length();
                 const slice::Bounds default_fstart = std::make_pair<int64_t, int64_t>(0, 0);
                 const slice::Bounds default_rstop = std::make_pair(inf_bound - norm_dim, inf_bound - norm_dim);
                 const slice::Bounds norm_dim_bounds = std::make_pair(norm_dim, norm_dim);
@@ -175,7 +182,8 @@ void shape_infer(const StridedSlice* op,
                 const auto& stop = end_mask.count(axis) ? default_stop : (*end)[axis];
                 auto sliced_dim = slice::make_dim(input_dim, start, stop, stride);
 
-                if (std::is_same<DimType, ov::Dimension>::value && (sliced_dim == input_dim)) {
+                if (std::is_same<DimType, ov::Dimension>::value &&
+                    (sliced_dim == input_dim && sliced_dim != Dimension::dynamic())) {
                     // for equal ov::Dimension do merge to get input label (always success)
                     DimType::merge(sliced_dim, sliced_dim, input_dim);
                 }
@@ -194,6 +202,7 @@ void shape_infer(const StridedSlice* op,
     for (; input_shape_idx < input_shape.rank().get_length(); ++input_shape_idx) {
         out.push_back(input_shape[input_shape_idx]);
     }
+    return output_shapes;
 }
 }  // namespace v1
 }  // namespace op

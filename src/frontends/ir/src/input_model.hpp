@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -7,9 +7,9 @@
 #include <istream>
 #include <memory>
 
-#include "ngraph/runtime/aligned_buffer.hpp"
 #include "openvino/frontend/manager.hpp"
 #include "openvino/frontend/visibility.hpp"
+#include "openvino/runtime/aligned_buffer.hpp"
 
 namespace ov {
 namespace frontend {
@@ -21,8 +21,14 @@ class InputModel : public ov::frontend::InputModel {
 
 public:
     InputModel(std::istream& stream,
-               const std::shared_ptr<ngraph::runtime::AlignedBuffer>& weights,
-               const std::unordered_map<ov::DiscreteTypeInfo, ov::BaseOpExtension::Ptr>& extensions);
+               const std::shared_ptr<ov::AlignedBuffer>& weights,
+               const std::unordered_map<ov::DiscreteTypeInfo, ov::BaseOpExtension::Ptr>& extensions,
+               std::string weights_path = {});
+
+    InputModel(const std::shared_ptr<ov::AlignedBuffer>& model_buf,
+               const std::shared_ptr<ov::AlignedBuffer>& weights,
+               const std::unordered_map<ov::DiscreteTypeInfo, ov::BaseOpExtension::Ptr>& extensions,
+               std::string weights_path = {});
 
     std::shared_ptr<Model> convert();
 };

@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2018-2023 Intel Corporation
+﻿// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -63,7 +63,8 @@ MVNKernelBfyxOpt::Parent::DispatchData MVNKernelBfyxOpt::SetDefault(const mvn_pa
         dispatchData.lws[2] = 1;
         // Compute maximum possible LWS that does not exceed device capabilities and optimizes number of global memory
         // reads.
-        while ((dispatchData.itemsNum > 32 || dispatchData.lws[0] < dispatchData.itemsNum) && (2 * dispatchData.lws[0] <= max_lws)) {
+        // WA: itemsNum value has been adjusted less than or equal to 8 to increase the number of work items.
+        while ((dispatchData.itemsNum > 8 || dispatchData.lws[0] < dispatchData.itemsNum) && (2 * dispatchData.lws[0] <= max_lws)) {
             dispatchData.lws[0] *= 2;
             dispatchData.itemsNum /= 2;
         }
@@ -79,31 +80,27 @@ JitConstants MVNKernelBfyxOpt::GetJitConstants(const mvn_params& params, MVNKern
 
     if (params.has_dynamic_tensors()) {
         const auto& input = params.inputs[0];
-        DimensionAccessHelper dims(input, 0);
+        DimensionAccessHelperJit dims(input);
         std::string data_set_size;
         std::string data_set_count;
         if (params.mvnMode == MVNMode::WITHIN_CHANNELS) {
-            data_set_size = toVectorMulString({dims.x, dims.y, dims.z});
-            data_set_count = toVectorMulString({dims.f, dims.b});
+            data_set_size = toVectorMulString({dims.x(), dims.y(), dims.z()});
+            data_set_count = toVectorMulString({dims.f(), dims.b()});
         } else {
-            data_set_size = toVectorMulString({dims.x, dims.y, dims.z, dims.f});
-            data_set_count = dims.b;
+            data_set_size = toVectorMulString({dims.x(), dims.y(), dims.z(), dims.f()});
+            data_set_count = dims.b();
         }
         const std::string lws_0 = "get_local_size(0)";
         jit.AddConstants({
             MakeJitConstant("LWS", lws_0),
-            MakeJitConstant("SLM_SIZE", dispatchData.maxSlmSize),
             MakeJitConstant("DATA_SET_SIZE", data_set_size),
             MakeJitConstant("DATA_SETS_COUNT", data_set_count),
         });
     } else {
         jit.AddConstants({
-            MakeJitConstant("ITEMS_NUM", dispatchData.itemsNum),
             MakeJitConstant("LWS", dispatchData.lws[0]),
-            MakeJitConstant("SLM_SIZE", dispatchData.lws[0]),
             MakeJitConstant("DATA_SETS_COUNT", dispatchData.dataSetsCount),
             MakeJitConstant("DATA_SET_SIZE", dispatchData.dataSetSize),
-            MakeJitConstant("LEFTOVERS", dispatchData.leftovers),
         });
     }
     auto activation_dt = GetActivationType(params);
@@ -145,11 +142,11 @@ JitConstants MVNKernelBfyxOpt::GetJitConstants(const mvn_params& params, MVNKern
     return jit;
 }
 
-KernelsData MVNKernelBfyxOpt::GetKernelsData(const Params& params, const optional_params& optParams) const {
-    return GetCommonKernelsData(params, optParams);
+KernelsData MVNKernelBfyxOpt::GetKernelsData(const Params& params) const {
+    return GetCommonKernelsData(params);
 }
 
-KernelsPriority MVNKernelBfyxOpt::GetKernelsPriority(const Params& /*params*/, const optional_params& /*options*/) const {
+KernelsPriority MVNKernelBfyxOpt::GetKernelsPriority(const Params& /*params*/) const {
     return FORCE_PRIORITY_7;
 }
 }  // namespace kernel_selector

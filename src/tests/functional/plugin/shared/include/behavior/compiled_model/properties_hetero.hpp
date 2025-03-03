@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -31,7 +31,7 @@ protected:
 public:
     void SetUp() override {
         target_device = GetParam();
-        heteroDeviceName = CommonTestUtils::DEVICE_HETERO + std::string(":") + target_device;
+        heteroDeviceName = ov::test::utils::DEVICE_HETERO + std::string(":") + target_device;
         SKIP_IF_CURRENT_TEST_IS_DISABLED();
         APIBaseTest::SetUp();
         OVClassNetworkTest::SetUp();

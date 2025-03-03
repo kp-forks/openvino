@@ -1,122 +1,62 @@
-// Copyright (C) 2022 Intel Corporation
+// Copyright (C) 2023 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #include <gtest/gtest.h>
-
 #include "pass/softmax_decomposition.hpp"
 #include "common_test_utils/common_utils.hpp"
 #include "subgraph_softmax.hpp"
 #include "subgraph_lowered.hpp"
 
-#include "snippets/pass/softmax_decomposition.hpp"
-#include "snippets/pass/insert_load_store.hpp"
-#include "snippets/pass/insert_movebroadcast.hpp"
-#include "snippets/pass/insert_buffer.hpp"
-#include "snippets/pass/convert_power_to_powerstatic.hpp"
-
-
 namespace ov {
 namespace test {
 namespace snippets {
 
-std::string SoftmaxTests::getTestCaseName(testing::TestParamInfo<SoftmaxParams> obj) {
-    Shape inputShape;
+std::string SoftmaxDecompositionTest::getTestCaseName(testing::TestParamInfo<SoftmaxDecompositionTestParams> obj) {
+    PartialShape input_shape;
     int axis;
-    std::tie(inputShape, axis) = obj.param;
+    SoftmaxVersion softmax_version;
+    std::tie(input_shape, axis, softmax_version) = obj.param;
     std::ostringstream result;
-    result << "IS=" << CommonTestUtils::vec2str(inputShape) << "_";
-    result << "Axis=" << axis << "_";
+    result << "IS=" << ov::test::utils::partialShape2str({input_shape}) << "_";
+    result << "axis=" << axis << "_";
+    result << "softmax_version=" << softmax_version;
     return result.str();
 }
 
-void SoftmaxTests::SetUp() {
+void SoftmaxDecompositionTest::SetUp() {
     LoweringTests::SetUp();
-
-    const size_t count = 10;
-    manager.register_pass<ngraph::snippets::pass::SoftmaxDecomposition>(count);
-    manager.register_pass<ngraph::snippets::pass::ConvertPowerToPowerStatic>();
-    manager.register_pass<ngraph::snippets::pass::InsertLoad>(count);
-    manager.register_pass<ngraph::snippets::pass::InsertStore>(count);
-    manager.register_pass<ngraph::snippets::pass::InsertMoveBroadcast>();
-    Shape inputShape;
+    std::vector<PartialShape> input_shapes{{}};
     int axis;
-    std::tie(inputShape, axis) = this->GetParam();
-    snippets_function = std::make_shared<SoftmaxLoweredFunction>(std::vector<PartialShape>{inputShape}, axis);
-    master_shape = inputShape;
+    SoftmaxVersion softmax_version;
+    std::tie(input_shapes[0], axis, softmax_version) = this->GetParam();
+    snippets_model = std::make_shared<SoftmaxFunction>(input_shapes, axis, softmax_version);
 }
 
-std::string AddSoftmaxTests::getTestCaseName(testing::TestParamInfo<AddSoftmaxParams> obj) {
-    Shape inputShape0, inputShape1;
-    int axis;
-    std::tie(inputShape0, inputShape1, axis) = obj.param;
-    std::ostringstream result;
-    result << "IS[0]=" << CommonTestUtils::vec2str(inputShape0) << "_";
-    result << "IS[1]=" << CommonTestUtils::vec2str(inputShape1) << "_";
-    result << "Axis=" << axis << "_";
-    return result.str();
+TEST_P(SoftmaxDecompositionTest, SoftmaxDecomposition) {
+    auto subgraph = getLoweredSubgraph(snippets_model->getOriginal());
+    model = subgraph->body_ptr();
+    model_ref = snippets_model->getLowered();
 }
 
-void AddSoftmaxTests::SetUp() {
-    LoweringTests::SetUp();
+namespace SoftmaxDecompositionTestInstantiation {
+const std::vector<ov::PartialShape> input_shapes{{1, 3, 256, 256}};
 
-    const size_t count = 10;
-    manager.register_pass<ngraph::snippets::pass::InsertBuffer>();
-    manager.register_pass<ngraph::snippets::pass::SoftmaxDecomposition>(count);
-    manager.register_pass<ngraph::snippets::pass::ConvertPowerToPowerStatic>();
-    manager.register_pass<ngraph::snippets::pass::InsertLoad>(count);
-    manager.register_pass<ngraph::snippets::pass::InsertStore>(count);
-    manager.register_pass<ngraph::snippets::pass::InsertMoveBroadcast>();
-    Shape inputShape0, inputShape1;
-    int axis;
-    std::tie(inputShape0, inputShape1, axis) = this->GetParam();
-    snippets_function = std::make_shared<AddSoftmaxLoweredFunction>(std::vector<PartialShape>{inputShape0, inputShape1}, axis);
+INSTANTIATE_TEST_SUITE_P(smoke_Snippets_SoftmaxDecomposition_positive_axis,
+                         SoftmaxDecompositionTest,
+                         ::testing::Combine(::testing::ValuesIn(input_shapes),
+                                            ::testing::Values(3),
+                                            ::testing::Values(SoftmaxVersion::V1, SoftmaxVersion::V8)),
+                         SoftmaxDecompositionTest::getTestCaseName);
 
-    ov::PartialShape master_pshape(inputShape0);
-    ov::PartialShape::broadcast_merge_into(master_pshape, inputShape1, op::AutoBroadcastType::NUMPY);
-    master_shape = master_pshape.get_shape();
-}
+INSTANTIATE_TEST_SUITE_P(smoke_Snippets_SoftmaxDecomposition_negative_axis,
+                         SoftmaxDecompositionTest,
+                         ::testing::Combine(::testing::ValuesIn(input_shapes),
+                                            ::testing::Values(-1),
+                                            ::testing::Values(SoftmaxVersion::V8)),
+                         SoftmaxDecompositionTest::getTestCaseName);
 
-TEST_P(SoftmaxTests, SoftmaxDecomposition) {
-    PartialShape scheduler_shape({master_shape[master_shape.size() - 2],
-                                  master_shape[master_shape.size() - 1]});
-    auto subgraph = getLoweredSubgraph(snippets_function->getOriginal(), scheduler_shape);
-    function = subgraph->body_ptr();
-    function_ref = snippets_function->getLowered();
-}
-
-TEST_P(AddSoftmaxTests, AddSoftmaxDecomposition) {
-    PartialShape scheduler_shape({master_shape[master_shape.size() - 2],
-                                  master_shape[master_shape.size() - 1]});
-    auto subgraph = getLoweredSubgraph(snippets_function->getOriginal(), scheduler_shape);
-    function = subgraph->body_ptr();
-    function_ref = snippets_function->getLowered();
-}
-
-namespace SoftmaxTestsInstantiation {
-std::vector<ov::Shape> inputShape{{12, 4, 12, 12, 127}, {12, 4, 12, 12, 1}};
-
-INSTANTIATE_TEST_SUITE_P(smoke_Snippets_SoftmaxDecomposition, SoftmaxTests,
-                         ::testing::Combine(
-                                 ::testing::ValuesIn(inputShape),
-                                 ::testing::Values(-1)),
-                         SoftmaxTests::getTestCaseName);
-
-}  // namespace SoftmaxTestsInstantiation
-
-namespace AddSoftmaxTestsInstantiation {
-std::vector<ov::Shape> inputShape0{{12, 4, 12, 12, 17}, {12, 4, 12, 12, 1}};
-std::vector<ov::Shape> inputShape1{{12, 4, 12, 12, 17}, {12, 4, 12, 12, 1}};
-
-INSTANTIATE_TEST_SUITE_P(smoke_Snippets_AddSoftmaxDecomposition, AddSoftmaxTests,
-                         ::testing::Combine(
-                                 ::testing::ValuesIn(inputShape0),
-                                 ::testing::ValuesIn(inputShape1),
-                                 ::testing::Values(-1)),
-                         AddSoftmaxTests::getTestCaseName);
-
-}  // namespace AddSoftmaxTestsInstantiation
-
+}  // namespace SoftmaxDecompositionTestInstantiation
 }  // namespace snippets
 }  // namespace test
 }  // namespace ov

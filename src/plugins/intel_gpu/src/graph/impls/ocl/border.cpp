@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -16,18 +16,17 @@ struct border_impl : typed_primitive_impl_ocl<border> {
     using parent = typed_primitive_impl_ocl<border>;
     using parent::parent;
     using kernel_selector_t = kernel_selector::border_kernel_selector;
-    using kernel_params_t = std::pair<kernel_selector::border_params, kernel_selector::border_optional_params>;
+    using kernel_params_t = kernel_selector::border_params;
 
-    DECLARE_OBJECT_TYPE_SERIALIZATION
+    DECLARE_OBJECT_TYPE_SERIALIZATION(cldnn::ocl::border_impl)
 
     std::unique_ptr<primitive_impl> clone() const override {
-        return make_unique<border_impl>(*this);
+        return make_deep_copy<border_impl, kernel_params_t>(*this);
     }
 
     static kernel_params_t get_kernel_params(const kernel_impl_params& impl_param, bool is_shape_agnostic = false) {
         const auto& primitive = impl_param.typed_desc<border>();
         auto params = get_default_params<kernel_selector::border_params>(impl_param, is_shape_agnostic);
-        auto optional_params = get_default_optional_params<kernel_selector::border_optional_params>(impl_param.get_program());
 
         size_t rank = impl_param.get_input_layout(0).get_rank();
         format pads_format = format::adjust_to_rank(format::bfyx, rank);
@@ -46,7 +45,7 @@ struct border_impl : typed_primitive_impl_ocl<border> {
                 begin_vec.insert(begin_vec.end(), zeros_to_add, 0);
             }
             std::vector<tensor::value_type> pads_begin(begin_vec.begin(), begin_vec.end());
-            params.lt_sizes = convert_dim_vector(tensor(pads_format, pads_begin, 0));
+            params.lt_sizes = convert_dim_vector<int32_t>(tensor(pads_format, pads_begin, 0));
         } else {
             params.begin_type = kernel_selector::base_params::ArgType::Input;
 
@@ -65,7 +64,7 @@ struct border_impl : typed_primitive_impl_ocl<border> {
                 end_vec.insert(end_vec.end(), zeros_to_add, 0);
             }
             std::vector<tensor::value_type> pads_end(end_vec.begin(), end_vec.end());
-            params.rb_sizes = convert_dim_vector(tensor(pads_format, pads_end, 0));
+            params.rb_sizes = convert_dim_vector<int32_t>(tensor(pads_format, pads_end, 0));
         } else {
             params.end_type = kernel_selector::base_params::ArgType::Input;
 
@@ -100,12 +99,68 @@ struct border_impl : typed_primitive_impl_ocl<border> {
                 OPENVINO_ASSERT(false, "[GPU] Encountered unhandled enum case: PadMode during translation to kernel selector enumeration.");
         }
 
-        return {params, optional_params};
+        params.allow_negative_pad = primitive->allow_negative_pad;
+
+        return params;
     }
 
     void update_dispatch_data(const kernel_impl_params& impl_param) override {
-        auto kernel_params = get_kernel_params(impl_param, true);
-        (_kernel_data.update_dispatch_data_func)(kernel_params.first, _kernel_data);
+        // If model loaded from cache, params are not initialized, so we create a new object and reuse it in the future
+        if (_kernel_data.params == nullptr) {
+            _kernel_data.params = std::make_shared<kernel_params_t>(get_kernel_params(impl_param, true));
+        }
+
+        update_shapes(*_kernel_data.params, impl_param);
+        (_kernel_data.update_dispatch_data_func)(*_kernel_data.params, _kernel_data);
+    }
+
+    void save(BinaryOutputBuffer& ob) const override {
+        parent::save(ob);
+        const auto& prim_params = static_cast<const kernel_selector::border_params&>(*_kernel_data.params);
+        if (prim_params.inputs[0].LogicalSize() == 0) {
+            ob << true;
+        } else {
+            ob << false;
+        }
+    }
+
+    void load(BinaryInputBuffer& ib) override {
+        parent::load(ib);
+        ib >> zero_input;
+        if (is_dynamic() && _kernel_data.kernelName.length() != 0) {
+            auto& kernel_selector = kernel_selector_t::Instance();
+            auto kernel_impl = kernel_selector.GetImplementation(_kernel_data.kernelName);
+            kernel_impl->GetUpdateDispatchDataFunc(_kernel_data);
+        }
+    }
+
+protected:
+    // WA for static impl deserialization
+    bool zero_input = false;
+
+    kernel_arguments_data get_arguments(const typed_primitive_inst<border>& instance) const override {
+        kernel_arguments_data args = parent::get_arguments(instance);
+
+        // In case of zero input shape and non-zero output (kernel execution is not skipped), we need to add fake input buffer
+        // So as not to get an error during the argument setting stage
+        if (instance.get_input_layout().count() == 0) {
+            args.inputs[0] = instance.get_intermediates_memories().front();
+        }
+
+        return args;
+    }
+
+    std::vector<layout> get_internal_buffer_layouts_impl() const override {
+        const auto& prim_params = static_cast<const kernel_selector::border_params&>(*_kernel_data.params);
+        std::vector<layout> layouts;
+
+        if ((_kernel_data.params == nullptr && zero_input) ||
+            (_kernel_data.params != nullptr && prim_params.inputs[0].LogicalSize() == 0)) {
+            layout any_layout = {data_types::u8, format::bfyx, {1, 1, 1, 1}};
+            layouts.push_back(any_layout);
+        }
+
+        return layouts;
     }
 };
 
@@ -157,3 +212,4 @@ attach_border_impl::attach_border_impl() {
 }  // namespace cldnn
 
 BIND_BINARY_BUFFER_WITH_TYPE(cldnn::ocl::border_impl)
+BIND_BINARY_BUFFER_WITH_TYPE(cldnn::border)

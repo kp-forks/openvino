@@ -1,11 +1,11 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #pragma once
 
 /**
- * @brief This is a header file for the Inference Engine Cache Guard class C++ API
+ * @brief This is a header file for the OpenVINO Cache Guard class C++ API
  *
  * @file cache_guard.hpp
  */
@@ -69,7 +69,7 @@ private:
 
 /**
  * @brief This class holds a table of currently locked hashes
- * Inference engine core will need to obtain a lock for a specific cache to get exclusive access to it
+ * OpenVINO core will need to obtain a lock for a specific cache to get exclusive access to it
  * It is needed to avoid race situations when multiple threads try to to write to the same cache simultaneously
  *
  * Usage example:

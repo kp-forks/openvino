@@ -1,8 +1,12 @@
-# Copyright (C) 2018-2023 Intel Corporation
+# Copyright (C) 2018-2025 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 #
 
 set(TARGET_NAME ov_transformations_tests)
+
+if(CMAKE_COMPILER_IS_GNUCXX OR OV_COMPILER_IS_CLANG)
+    ov_add_compiler_flags(-Wno-missing-declarations)
+endif()
 
 ov_add_test_target(
     NAME ${TARGET_NAME}
@@ -10,15 +14,14 @@ ov_add_test_target(
     DEPENDENCIES
     LINK_LIBRARIES
         gmock
-        funcTestUtils
-        offline_transformations
+        func_test_utils
+        openvino::offline_transformations
+        openvino::reference
         sharedTestClasses
-        lptNgraphFunctions
+        ov_lpt_models
     ADD_CLANG_FORMAT
-    INCLUDES
-        $<TARGET_PROPERTY:inference_engine_obj,SOURCE_DIR>/src
     LABELS
-        TRANSFORMATIONS
+        OV UNIT TRANSFORMATIONS
 )
 
 if(WIN32)

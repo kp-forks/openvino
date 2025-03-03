@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -13,29 +13,45 @@ namespace pytorch {
 class PtFrameworkNode : public ov::op::util::FrameworkNode {
 public:
     OPENVINO_OP("PtFrameworkNode", "util", ::ov::op::util::FrameworkNode);
+    static constexpr const char* op_type_key = "PtTypeName";
+    static constexpr const char* schema_key = "PtSchema";
+    static constexpr const char* failed_conversion_key = "PtException";
 
-    PtFrameworkNode(const std::shared_ptr<TorchDecoder>& decoder, const OutputVector& inputs, size_t output_size)
-        : ov::op::util::FrameworkNode(inputs, output_size, decoder->get_subgraph_size()),
+    PtFrameworkNode(const std::shared_ptr<TorchDecoder>& decoder,
+                    const OutputVector& inputs,
+                    size_t output_size,
+                    bool is_reverseprop = false,
+                    bool skip_subgraphs = false)
+        : ov::op::util::FrameworkNode(inputs, output_size, skip_subgraphs ? 0 : decoder->get_subgraph_size()),
           m_decoder(decoder) {
         ov::op::util::FrameworkNodeAttrs attrs;
         attrs.set_type_name("PTFrameworkNode");
-        attrs["PtTypeName"] = m_decoder->get_op_type();
-        attrs["PtSchema"] = m_decoder->get_schema();
+        if (is_reverseprop) {
+            attrs[op_type_key] = m_decoder->get_op_type() + "_reverseprop";
+            attrs[schema_key] = "None";
+            attrs[failed_conversion_key] =
+                "This is an internal openvino operation representing reverse data propagation. It should not appear in "
+                "graph in normal conversion flow and might be result of other failures.";
+        } else {
+            attrs[op_type_key] = m_decoder->get_op_type();
+            attrs[schema_key] = m_decoder->get_schema();
+        }
         set_attrs(attrs);
 
         // Set output shapes and types if recognized
         for (size_t i = 0; i < output_size; ++i) {
             PartialShape ps;
-            // TODO: Try to decode PT type as a custom type
             auto type = element::dynamic;
             if (i < decoder->num_of_outputs()) {
                 try {
                     ps = m_decoder->get_output_shape(i);
+                    auto dec_type = simplified_type_interpret(decoder->get_output_type(i));
+                    if (dec_type.is<element::Type>())
+                        type = dec_type.as<element::Type>();
                 } catch (...) {
                     // nothing, means the info cannot be queried and remains unknown
                 }
             }
-            // TODO: Set custom `type` via special API
             set_output_type(i, type, ps);
         }
     }
@@ -64,8 +80,8 @@ public:
         return m_decoder->get_op_type();
     }
 
-    TorchDecoder* get_decoder() const {
-        return m_decoder.get();
+    std::shared_ptr<TorchDecoder> get_decoder() const {
+        return m_decoder;
     }
 
 private:

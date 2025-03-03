@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 #pragma once
@@ -22,18 +22,18 @@ constexpr size_t filter_non_spatial_dims_count<v1::GroupConvolution>() {
 }  // namespace convolution
 
 namespace v1 {
-template <class TShape>
-std::vector<TShape> shape_infer(const GroupConvolution* op,
-                                const std::vector<TShape>& input_shapes,
-                                CoordinateDiff& pads_begin,
-                                CoordinateDiff& pads_end,
-                                const std::map<size_t, HostTensorPtr>& constant_data = {}) {
+template <class TShape, class TRShape = result_shape_t<TShape>>
+std::vector<TRShape> shape_infer(const GroupConvolution* op,
+                                 const std::vector<TShape>& input_shapes,
+                                 CoordinateDiff& pads_begin,
+                                 CoordinateDiff& pads_end) {
     NODE_VALIDATION_CHECK(op, input_shapes.size() >= 2);
     using namespace ov::util;
 
     const auto num_spatial = convolution::calculate_num_spatial(op, input_shapes);
 
-    TShape output_shape;
+    auto output_shapes = std::vector<TRShape>(1);
+    auto& output_shape = output_shapes[0];
     if (num_spatial != convolution::num_spatial_undefined) {
         const auto& data_shape = input_shapes[0];
         const auto& filters_shape = input_shapes[1];
@@ -80,7 +80,7 @@ std::vector<TShape> shape_infer(const GroupConvolution* op,
         output_shape = PartialShape::dynamic();
     }
 
-    return {output_shape};
+    return output_shapes;
 }
 }  // namespace v1
 }  // namespace op

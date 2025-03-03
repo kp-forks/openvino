@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -11,10 +11,11 @@
 #include "openvino/core/any.hpp"
 #include "openvino/frontend/frontend.hpp"
 #include "openvino/frontend/visibility.hpp"
+#include "openvino/runtime/common.hpp"
 
 namespace ov {
 // Forward declaration
-FRONTEND_API void shutdown();
+OPENVINO_RUNTIME_API void shutdown();
 namespace frontend {
 // -------------- FrontEndManager -----------------
 using FrontEndFactory = std::function<FrontEnd::Ptr()>;
@@ -59,6 +60,9 @@ public:
     FrontEnd::Ptr load_by_model(const Types&... vars) {
         return load_by_model_impl({ov::Any{vars}...});
     }
+    FrontEnd::Ptr load_by_model(const std::vector<ov::Any>& variants) {
+        return load_by_model_impl(variants);
+    }
 
     /// \brief Gets list of registered frontends. Any not loaded frontends will be loaded by this call
     std::vector<std::string> get_available_front_ends();
@@ -87,7 +91,7 @@ private:
 
     std::unique_ptr<Impl> m_impl;
 
-    friend FRONTEND_API void ov::shutdown();
+    friend OPENVINO_RUNTIME_API void ov::shutdown();
     /// \brief Shutdown the manager by try releasing frontend libraries
     static void shutdown();
 };
