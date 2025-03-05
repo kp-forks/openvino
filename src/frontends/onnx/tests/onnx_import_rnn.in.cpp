@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -13,32 +13,30 @@
 #include <stdexcept>
 #include <vector>
 
+#include "common_test_utils/all_close.hpp"
 #include "common_test_utils/file_utils.hpp"
-#include "common_test_utils/ngraph_test_utils.hpp"
-#include "engines_util/test_case.hpp"
-#include "engines_util/test_engines.hpp"
+#include "common_test_utils/ndarray.hpp"
+#include "common_test_utils/ov_test_utils.hpp"
+#include "common_test_utils/test_case.hpp"
+#include "common_test_utils/test_control.hpp"
+#include "common_test_utils/test_tools.hpp"
 #include "gtest/gtest.h"
-#include "ngraph/ngraph.hpp"
-#include "onnx_import/onnx.hpp"
-#include "util/all_close.hpp"
-#include "util/all_close_f.hpp"
-#include "util/ndarray.hpp"
-#include "util/test_control.hpp"
-#include "util/test_tools.hpp"
+#include "onnx_utils.hpp"
+#include "openvino/op/gru_sequence.hpp"
+#include "openvino/op/lstm_sequence.hpp"
+#include "openvino/op/rnn_sequence.hpp"
 
-using namespace ngraph;
-OPENVINO_SUPPRESS_DEPRECATED_START
+using namespace ov;
+using namespace ov::frontend::onnx::tests;
 
-static std::string s_manifest = "${MANIFEST}";
-static std::string s_device = test::backend_name_to_device("${BACKEND_NAME}");
+static std::string s_manifest = onnx_backend_manifest("${MANIFEST}");
+static std::string s_device = backend_name_to_device("${BACKEND_NAME}");
 
-// ONNX LSTM tests (implemented by nGraph LSTMCell and LSTMSequence)
-NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_fwd_default_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/lstm_fwd_default_const.onnx"));
+// ONNX LSTM tests (implemented by OpenVINO LSTMCell and LSTMSequence)
+OPENVINO_TEST(${BACKEND_NAME}, onnx_model_lstm_fwd_default_const) {
+    auto model = convert_model("lstm_fwd_default_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>({0.68172926f, 1.1405563f, -0.03931177f, -0.03759607f});  // X
 
     test_case.add_expected_output<float>(Shape{2, 1, 1, 2},
@@ -49,12 +47,10 @@ NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_fwd_default_const) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 1);
 }
 
-NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_reverse_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/lstm_reverse_const.onnx"));
+OPENVINO_TEST(${BACKEND_NAME}, onnx_model_lstm_reverse_const) {
+    auto model = convert_model("lstm_reverse_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>({0.68172926f, 1.1405563f, -0.03931177f, -0.03759607f});  // X
 
     test_case.add_expected_output<float>(Shape{2, 1, 1, 2},
@@ -65,11 +61,10 @@ NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_reverse_const) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 1);
 }
 
-NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_bidir_const) {
-    auto function = onnx_import::import_onnx_model(
-        file_util::path_join(CommonTestUtils::getExecutableDirectory(), SERIALIZED_ZOO, "onnx/lstm_bidir_const.onnx"));
+OPENVINO_TEST(${BACKEND_NAME}, onnx_model_lstm_bidir_const) {
+    auto model = convert_model("lstm_bidir_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>({0.68172926f, 1.1405563f, -0.03931177f, -0.03759607f});  // X
 
     test_case.add_expected_output<float>(Shape{2, 2, 1, 2},
@@ -89,12 +84,10 @@ NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_bidir_const) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 1);
 }
 
-NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_fwd_with_clip_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/lstm_fwd_clip_const.onnx"));
+OPENVINO_TEST(${BACKEND_NAME}, onnx_model_lstm_fwd_with_clip_const) {
+    auto model = convert_model("lstm_fwd_clip_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>({0.68172926f, 1.1405563f, -0.03931177f, -0.03759607f});  // X
 
     test_case.add_expected_output<float>(Shape{2, 1, 1, 2},
@@ -105,12 +98,10 @@ NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_fwd_with_clip_const) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 1);
 }
 
-NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_fwd_mixed_seq_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/lstm_fwd_mixed_seq_const.onnx"));
+OPENVINO_TEST(${BACKEND_NAME}, onnx_model_lstm_fwd_mixed_seq_const) {
+    auto model = convert_model("lstm_fwd_mixed_seq_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>({0.68172926f, 1.1405563f, -0.03931177f, -0.03759607f});  // X
 
     test_case.add_expected_output<float>(Shape{2, 1, 2, 3},
@@ -136,12 +127,10 @@ NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_fwd_mixed_seq_const) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 1);
 }
 
-NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_reverse_mixed_seq_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/lstm_reverse_mixed_seq_const.onnx"));
+OPENVINO_TEST(${BACKEND_NAME}, onnx_model_lstm_reverse_mixed_seq_const) {
+    auto model = convert_model("lstm_reverse_mixed_seq_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>({0.68172926f, 1.1405563f, -0.03931177f, -0.03759607f});  // X
 
     test_case.add_expected_output<float>(Shape{2, 1, 2, 3},
@@ -167,12 +156,10 @@ NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_reverse_mixed_seq_const) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 1);
 }
 
-NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_bidir_mixed_seq_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/lstm_bidir_mixed_seq_const.onnx"));
+OPENVINO_TEST(${BACKEND_NAME}, onnx_model_lstm_bidir_mixed_seq_const) {
+    auto model = convert_model("lstm_bidir_mixed_seq_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>(
         {0.68172926f, 1.1405563f, -0.03931177f, -0.03759607f, 1.1397027f, 0.60444903f, 1.3246384f, -0.28191715f});  // X
 
@@ -215,80 +202,10 @@ NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_bidir_mixed_seq_const) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 1);
 }
 
-NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_fwd_with_clip_peepholes) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/lstm_fwd_with_clip_peepholes.onnx"));
+OPENVINO_TEST(${BACKEND_NAME}, onnx_model_lstm_fwd_mixed_seq) {
+    auto model = convert_model("lstm_fwd_mixed_seq.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
-    test_case.add_input<float>({-0.455351f, -0.276391f, -0.185934f, -0.269585f});  // X
-    test_case.add_input<float>({-0.494659f,                                        // W
-                                0.0453352f,
-                                -0.487793f,
-                                0.417264f,
-                                -0.0175329f,
-                                0.489074f,
-                                -0.446013f,
-                                0.414029f,
-                                -0.0091708f,
-                                -0.255364f,
-                                -0.106952f,
-                                -0.266717f,
-                                -0.0888852f,
-                                -0.428709f,
-                                -0.283349f,
-                                0.208792f});  // W
-    test_case.add_input<float>({0.146626f,
-                                -0.0620289f,
-                                -0.0815302f,
-                                0.100482f,
-                                -0.219535f,
-                                -0.306635f,
-                                -0.28515f,
-                                -0.314112f,
-                                -0.228172f,
-                                0.405972f,
-                                0.31576f,
-                                0.281487f,
-                                -0.394864f,
-                                0.42111f,
-                                -0.386624f,
-                                -0.390225f});  // R
-
-    test_case.add_input<float>({0.381619f,
-                                0.0323954f,
-                                -0.14449f,
-                                0.420804f,
-                                -0.258721f,
-                                0.45056f,
-                                -0.250755f,
-                                0.0967895f,
-                                0.0f,
-                                0.0f,
-                                0.0f,
-                                0.0f,
-                                0.0f,
-                                0.0f,
-                                0.0f,
-                                0.0f});                                                  // B
-    test_case.add_input<float>({0.2345f, 0.5235f, 0.4378f, 0.3475f, 0.8927f, 0.3456f});  // P
-
-    test_case.add_expected_output<float>(Shape{2, 1, 1, 2},
-                                         {-0.02280854f, 0.02744377f, -0.03516197f, 0.03875681f});  // Y_data
-    test_case.add_expected_output<float>(Shape{1, 1, 2}, {-0.03516197f, 0.03875681f});             // Y_h_data
-    test_case.add_expected_output<float>(Shape{1, 1, 2}, {-0.07415761f, 0.07395997f});             // Y_c_data
-
-    // We have to enlarge tolerance bits to 3 - it's only one bit more than default value.
-    // The discrepancies may occur at most on 7th decimal position.
-    test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 3);
-}
-
-NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_fwd_mixed_seq) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/lstm_fwd_mixed_seq.onnx"));
-
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     int hidden_size{3};
     test_case.add_input<float>({1.f, 2.f, 10.f, 11.f});                                                // X
     test_case.add_input<float>({0.1f, 0.2f, 0.3f, 0.4f, 1.f, 2.f, 3.f, 4.f, 10.f, 11.f, 12.f, 13.f});  // W
@@ -321,12 +238,10 @@ NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_fwd_mixed_seq) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 1);
 }
 
-NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_fwd_hardsigmoid_activation) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/lstm_fwd_hardsigmoid_activation.onnx"));
+OPENVINO_TEST(${BACKEND_NAME}, onnx_model_lstm_fwd_hardsigmoid_activation) {
+    auto model = convert_model("lstm_fwd_hardsigmoid_activation.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     // X
     test_case.add_input<float>({-0.455351f, -0.276391f, -0.185934f, -0.269585f});
@@ -376,12 +291,10 @@ NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_fwd_hardsigmoid_activation) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 4);
 }
 
-NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_fwd_large_batch_no_clip) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/lstm_fwd_large_batch_no_clip.onnx"));
+OPENVINO_TEST(${BACKEND_NAME}, onnx_model_lstm_fwd_large_batch_no_clip) {
+    auto model = convert_model("lstm_fwd_large_batch_no_clip.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     std::size_t seq_length = 2;
     std::size_t batch_size = 32;
@@ -418,58 +331,10 @@ NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_fwd_large_batch_no_clip) {
     test_case.run();
 }
 
-NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_bdir_short_input_seq_peepholes) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/lstm_bdir_short_input_seq.onnx"));
+OPENVINO_TEST(${BACKEND_NAME}, onnx_model_lstm_mixed_seq_reverse) {
+    auto model = convert_model("lstm_mixed_seq_reverse.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
-
-    // X
-    test_case.add_input<float>({-0.455351f, -0.276391f, -0.185934f, -0.269585f});
-    // W
-    test_case.add_input<float>(
-        {-0.494659f,  0.0453352f, -0.487793f, 0.417264f,  -0.0175329f, 0.489074f,  -0.446013f, 0.414029f,
-         -0.0091708f, -0.255364f, -0.106952f, -0.266717f, -0.0888852f, -0.428709f, -0.283349f, 0.208792f,
-         -0.494659f,  0.0453352f, -0.487793f, 0.417264f,  -0.0175329f, 0.489074f,  -0.446013f, 0.414029f,
-         -0.0091708f, -0.255364f, -0.106952f, -0.266717f, -0.0888852f, -0.428709f, -0.283349f, 0.208792f});
-    // R
-    test_case.add_input<float>({0.146626f,  -0.0620289f, -0.0815302f, 0.100482f,   -0.219535f,  -0.306635f, -0.28515f,
-                                -0.314112f, -0.228172f,  0.405972f,   0.31576f,    0.281487f,   -0.394864f, 0.42111f,
-                                -0.386624f, -0.390225f,  0.146626f,   -0.0620289f, -0.0815302f, 0.100482f,  -0.219535f,
-                                -0.306635f, -0.28515f,   -0.314112f,  -0.228172f,  0.405972f,   0.31576f,   0.281487f,
-                                -0.394864f, 0.42111f,    -0.386624f,  -0.390225f});
-    // B
-    test_case.add_input<float>({0.381619f,  0.0323954f, -0.14449f,  0.420804f,  -0.258721f, 0.45056f,  -0.250755f,
-                                0.0967895f, 0.0f,       0.0f,       0.0f,       0.0f,       0.0f,      0.0f,
-                                0.0f,       0.0f,       0.381619f,  0.0323954f, -0.14449f,  0.420804f, -0.258721f,
-                                0.45056f,   -0.250755f, 0.0967895f, 0.0f,       0.0f,       0.0f,      0.0f,
-                                0.0f,       0.0f,       0.0f,       0.0f});
-    // sequence_lens
-    test_case.add_input<int>({1});
-    // initial_h
-    test_case.add_input<float>({0.0f, 0.0f, -0.0306872f, 0.028035f});
-    // initial_c
-    test_case.add_input<float>({0.0f, 0.0f, -0.07243599f, 0.0467052f});
-    // P
-    test_case.add_input<float>(
-        {0.2345f, 0.5235f, 0.4378f, 0.3475f, 0.8927f, 0.3456f, 0.2345f, 0.5235f, 0.4378f, 0.3475f, 0.8927f, 0.3456f});
-
-    // Y
-    test_case.add_expected_output<float>(Shape{2, 2, 1, 2},
-                                         {-0.0251062f, 0.0561262f, -0.0318928f, 0.0762679f, 0.0f, 0.0f, 0.0f, 0.0f});
-    // Y_h
-    test_case.add_expected_output<float>(Shape{2, 1, 2}, {-0.0251062f, 0.0561262f, -0.0318928f, 0.0762679f});
-
-    test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 3);
-}
-
-NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_mixed_seq_reverse) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/lstm_mixed_seq_reverse.onnx"));
-
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     size_t hidden_size = 3;
 
@@ -507,10 +372,8 @@ NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_mixed_seq_reverse) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 1);
 }
 
-NGRAPH_TEST(${BACKEND_NAME}, onnx_model_import_only_lstm_dynamic_batch_seq_all_inputs) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/dynamic_shapes/lstm_dyn_batch_seq.onnx"));
+OPENVINO_TEST(${BACKEND_NAME}, onnx_model_import_only_lstm_dynamic_batch_seq_all_inputs) {
+    auto model = convert_model("dynamic_shapes/lstm_dyn_batch_seq.onnx");
 
     auto batch_size = Dimension::dynamic();
     auto seq_length = Dimension::dynamic();
@@ -520,19 +383,16 @@ NGRAPH_TEST(${BACKEND_NAME}, onnx_model_import_only_lstm_dynamic_batch_seq_all_i
     auto Y_h_expected_output = PartialShape{num_directions, batch_size, hidden_size};
     auto Y_c_expected_output = PartialShape{num_directions, batch_size, hidden_size};
 
-    EXPECT_EQ(function->get_output_size(), 3);
-    EXPECT_EQ(function->get_output_partial_shape(0), Y_expected_output);
-    EXPECT_EQ(function->get_output_partial_shape(1), Y_h_expected_output);
-    EXPECT_EQ(function->get_output_partial_shape(2), Y_c_expected_output);
+    EXPECT_EQ(model->get_output_size(), 3);
+    EXPECT_EQ(model->get_output_partial_shape(0), Y_expected_output);
+    EXPECT_EQ(model->get_output_partial_shape(1), Y_h_expected_output);
+    EXPECT_EQ(model->get_output_partial_shape(2), Y_c_expected_output);
 
-    EXPECT_EQ(count_ops_of_type<op::v5::LSTMSequence>(function), 1);
+    EXPECT_EQ(count_ops_of_type<op::v5::LSTMSequence>(model), 1);
 }
 
-NGRAPH_TEST(${BACKEND_NAME}, onnx_model_import_only_lstm_dynamic_batch_seq_3_inputs) {
-    auto function =
-        onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                            SERIALIZED_ZOO,
-                                                            "onnx/dynamic_shapes/lstm_dyn_batch_seq_3_inputs.onnx"));
+OPENVINO_TEST(${BACKEND_NAME}, onnx_model_import_only_lstm_dynamic_batch_seq_3_inputs) {
+    auto model = convert_model("dynamic_shapes/lstm_dyn_batch_seq_3_inputs.onnx");
 
     auto batch_size = Dimension::dynamic();
     auto seq_length = Dimension::dynamic();
@@ -542,21 +402,18 @@ NGRAPH_TEST(${BACKEND_NAME}, onnx_model_import_only_lstm_dynamic_batch_seq_3_inp
     auto Y_h_expected_output = PartialShape{num_directions, batch_size, hidden_size};
     auto Y_c_expected_output = PartialShape{num_directions, batch_size, hidden_size};
 
-    EXPECT_EQ(function->get_output_size(), 3);
-    EXPECT_EQ(function->get_output_partial_shape(0), Y_expected_output);
-    EXPECT_EQ(function->get_output_partial_shape(1), Y_h_expected_output);
-    EXPECT_EQ(function->get_output_partial_shape(2), Y_c_expected_output);
+    EXPECT_EQ(model->get_output_size(), 3);
+    EXPECT_EQ(model->get_output_partial_shape(0), Y_expected_output);
+    EXPECT_EQ(model->get_output_partial_shape(1), Y_h_expected_output);
+    EXPECT_EQ(model->get_output_partial_shape(2), Y_c_expected_output);
 
-    EXPECT_EQ(count_ops_of_type<op::v5::LSTMSequence>(function), 1);
+    EXPECT_EQ(count_ops_of_type<op::v5::LSTMSequence>(model), 1);
 }
 
-NGRAPH_TEST(${BACKEND_NAME}, onnx_model_lstm_dynamic_batch_size_and_seq_len) {
-    auto function =
-        onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                            SERIALIZED_ZOO,
-                                                            "onnx/lstm_dynamic_batch_size_and_seq_len.onnx"));
+OPENVINO_TEST(${BACKEND_NAME}, onnx_model_lstm_dynamic_batch_size_and_seq_len) {
+    auto model = convert_model("lstm_dynamic_batch_size_and_seq_len.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>({1, 2, 3, 4, 5, 6});
 
     test_case.add_expected_output<float>(Shape{1, 1, 3, 2},
@@ -666,12 +523,10 @@ protected:
     void SetUp() override {}
 };
 
-NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_defaults_fwd_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/gru_defaults_fwd_const.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_defaults_fwd_const) {
+    auto model = convert_model("gru_defaults_fwd_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>(in_X);
 
     // Y
@@ -710,11 +565,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_defaults_fwd_const)
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 7);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_defaults_fwd) {
-    auto function = onnx_import::import_onnx_model(
-        file_util::path_join(CommonTestUtils::getExecutableDirectory(), SERIALIZED_ZOO, "onnx/gru_defaults_fwd.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_defaults_fwd) {
+    auto model = convert_model("gru_defaults_fwd.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     test_case.add_input<float>(in_X);
     test_case.add_input<float>(in_W);
@@ -756,14 +610,11 @@ NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_defaults_fwd) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 7);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_activations_const) {
+OPENVINO_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_activations_const) {
     // activations: relu, sigmoid
-    auto function =
-        onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                            SERIALIZED_ZOO,
-                                                            "onnx/gru_fwd_activations_relu_sigmoid_const.onnx"));
+    auto model = convert_model("gru_fwd_activations_relu_sigmoid_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>(in_X);
 
     // Y
@@ -798,14 +649,11 @@ NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_activations_con
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 5);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_activations_relu_hardsigmoid) {
+OPENVINO_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_activations_relu_hardsigmoid) {
     // activations: relu, hardsigmoid
-    auto function =
-        onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                            SERIALIZED_ZOO,
-                                                            "onnx/gru_fwd_activations_relu_hardsigmoid.onnx"));
+    auto model = convert_model("gru_fwd_activations_relu_hardsigmoid.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     test_case.add_input<float>(in_X);
     test_case.add_input<float>(in_W);
@@ -846,12 +694,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_activations_rel
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 5);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_mixed_seq_len) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/gru_fwd_mixed_seq_len.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_mixed_seq_len) {
+    auto model = convert_model("gru_fwd_mixed_seq_len.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     test_case.add_input<float>(in_X);
     test_case.add_input<float>(in_W);
@@ -896,12 +742,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_mixed_seq_len) 
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 3);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_mixed_seq_len_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/gru_fwd_mixed_seq_len_const.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_mixed_seq_len_const) {
+    auto model = convert_model("gru_fwd_mixed_seq_len_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     test_case.add_input<float>(in_X);
 
@@ -938,12 +782,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_mixed_seq_len_c
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 3);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_reverse_mixed_seq_len_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/gru_reverse_mixed_seq_len_const.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_reverse_mixed_seq_len_const) {
+    auto model = convert_model("gru_reverse_mixed_seq_len_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     test_case.add_input<float>(in_X);
 
@@ -980,12 +822,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_reverse_mixed_seq_l
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 3);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_bidir_mixed_seq_len_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/gru_bidir_mixed_seq_len_const.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_bidir_mixed_seq_len_const) {
+    auto model = convert_model("gru_bidir_mixed_seq_len_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     test_case.add_input<float>(in_X);
 
@@ -1022,11 +862,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_bidir_mixed_seq_len
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 4);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_rev_clip) {
-    auto function = onnx_import::import_onnx_model(
-        file_util::path_join(CommonTestUtils::getExecutableDirectory(), SERIALIZED_ZOO, "onnx/gru_rev_clip.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_rev_clip) {
+    auto model = convert_model("gru_rev_clip.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     test_case.add_input<float>(in_X);
     test_case.add_input<float>(in_W);
@@ -1068,12 +907,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_rev_clip) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 8);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_rev_clip_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/gru_rev_clip_const.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_rev_clip_const) {
+    auto model = convert_model("gru_rev_clip_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>(in_X);
 
     // Y
@@ -1112,11 +949,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_rev_clip_const) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 8);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_reverse_const) {
-    auto function = onnx_import::import_onnx_model(
-        file_util::path_join(CommonTestUtils::getExecutableDirectory(), SERIALIZED_ZOO, "onnx/gru_reverse_const.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_reverse_const) {
+    auto model = convert_model("gru_reverse_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>(in_X);
 
     // Y
@@ -1155,11 +991,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_reverse_const) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 8);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_reverse) {
-    auto function = onnx_import::import_onnx_model(
-        file_util::path_join(CommonTestUtils::getExecutableDirectory(), SERIALIZED_ZOO, "onnx/gru_reverse.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_reverse) {
+    auto model = convert_model("gru_reverse.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     test_case.add_input<float>(in_X);
     test_case.add_input<float>(in_W);
@@ -1201,12 +1036,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_reverse) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 8);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_bias_initial_h_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/gru_fwd_bias_initial_h_const.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_bias_initial_h_const) {
+    auto model = convert_model("gru_fwd_bias_initial_h_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>(in_X);
 
     // Y
@@ -1245,12 +1078,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_bias_initial_h_
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 5);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_bias_initial_h) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/gru_fwd_bias_initial_h.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_bias_initial_h) {
+    auto model = convert_model("gru_fwd_bias_initial_h.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     test_case.add_input<float>(in_X);
     test_case.add_input<float>(in_W);
@@ -1294,12 +1125,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_bias_initial_h)
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 4);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_bidirectional_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/gru_bidirectional_const.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_bidirectional_const) {
+    auto model = convert_model("gru_bidirectional_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>(in_X);
 
     // Y
@@ -1337,11 +1166,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_bidirectional_const
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 6);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_bidirectional) {
-    auto function = onnx_import::import_onnx_model(
-        file_util::path_join(CommonTestUtils::getExecutableDirectory(), SERIALIZED_ZOO, "onnx/gru_bidirectional.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_bidirectional) {
+    auto model = convert_model("gru_bidirectional.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     test_case.add_input<float>(in_X);
     test_case.add_input<float>(in_bdir_W);
@@ -1382,12 +1210,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_bidirectional) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 6);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_linear_before_reset_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/gru_fwd_linear_before_reset_const.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_linear_before_reset_const) {
+    auto model = convert_model("gru_fwd_linear_before_reset_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>(in_X);
 
     // Y
@@ -1426,12 +1252,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_linear_before_r
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 4);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_linear_before_reset) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/gru_fwd_linear_before_reset.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_linear_before_reset) {
+    auto model = convert_model("gru_fwd_linear_before_reset.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     test_case.add_input<float>(in_X);
     test_case.add_input<float>(in_W);
@@ -1474,13 +1298,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_fwd_linear_before_r
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 4);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_defaults_fwd_const_dynamic) {
-    auto function =
-        onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                            SERIALIZED_ZOO,
-                                                            "onnx/dynamic_shapes/gru_defaults_fwd_const_dynamic.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_defaults_fwd_const_dynamic) {
+    auto model = convert_model("dynamic_shapes/gru_defaults_fwd_const_dynamic.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>(Shape{4, 3, 2}, in_X);
 
     // Y
@@ -1519,11 +1340,8 @@ NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_gru_defaults_fwd_const_
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 7);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_import_only_gru_defaults_fwd_const_dynamic) {
-    auto function =
-        onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                            SERIALIZED_ZOO,
-                                                            "onnx/dynamic_shapes/gru_defaults_fwd_const_dynamic.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_import_only_gru_defaults_fwd_const_dynamic) {
+    auto model = convert_model("dynamic_shapes/gru_defaults_fwd_const_dynamic.onnx");
 
     auto batch_size = Dimension::dynamic();
     auto seq_length = Dimension::dynamic();
@@ -1532,11 +1350,11 @@ NGRAPH_TEST_F(${BACKEND_NAME}, GRUSequenceOp, onnx_model_import_only_gru_default
     auto Y_expected_output = PartialShape{batch_size, num_directions, seq_length, hidden_size};
     auto Y_h_expected_output = PartialShape{num_directions, batch_size, hidden_size};
 
-    EXPECT_EQ(function->get_output_size(), 2);
-    EXPECT_EQ(function->get_output_partial_shape(0), Y_expected_output);
-    EXPECT_EQ(function->get_output_partial_shape(1), Y_h_expected_output);
+    EXPECT_EQ(model->get_output_size(), 2);
+    EXPECT_EQ(model->get_output_partial_shape(0), Y_expected_output);
+    EXPECT_EQ(model->get_output_partial_shape(1), Y_h_expected_output);
 
-    EXPECT_EQ(count_ops_of_type<op::v5::GRUSequence>(function), 1);
+    EXPECT_EQ(count_ops_of_type<op::v5::GRUSequence>(model), 1);
 }
 
 // RNNLikeSequenceOp test fixture for test setup reuse
@@ -1621,12 +1439,10 @@ protected:
     void SetUp() override {}
 };
 
-NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_defaults_fwd_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/rnn_defaults_fwd_const.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_defaults_fwd_const) {
+    auto model = convert_model("rnn_defaults_fwd_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>(in_X);
 
     // Y
@@ -1665,11 +1481,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_defaults_fwd_const)
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 4);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_defaults_fwd) {
-    auto function = onnx_import::import_onnx_model(
-        file_util::path_join(CommonTestUtils::getExecutableDirectory(), SERIALIZED_ZOO, "onnx/rnn_defaults_fwd.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_defaults_fwd) {
+    auto model = convert_model("rnn_defaults_fwd.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     test_case.add_input<float>(in_X);
     test_case.add_input<float>(in_W);
@@ -1711,12 +1526,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_defaults_fwd) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 4);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_fwd_activations_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/rnn_fwd_activations_const.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_fwd_activations_const) {
+    auto model = convert_model("rnn_fwd_activations_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     test_case.add_input<float>(in_X);
 
@@ -1755,12 +1568,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_fwd_activations_con
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 5);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_fwd_activations) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/rnn_fwd_activations.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_fwd_activations) {
+    auto model = convert_model("rnn_fwd_activations.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     test_case.add_input<float>(in_X);
     test_case.add_input<float>(in_W);
@@ -1801,12 +1612,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_fwd_activations) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 5);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_fwd_mixed_seq_len_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/rnn_fwd_mixed_seq_len_const.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_fwd_mixed_seq_len_const) {
+    auto model = convert_model("rnn_fwd_mixed_seq_len_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>(in_X);
 
     // Y
@@ -1845,12 +1654,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_fwd_mixed_seq_len_c
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 4);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_fwd_mixed_seq_len) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/rnn_fwd_mixed_seq_len.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_fwd_mixed_seq_len) {
+    auto model = convert_model("rnn_fwd_mixed_seq_len.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     test_case.add_input<float>(in_X);
     test_case.add_input<float>(in_W);
@@ -1895,12 +1702,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_fwd_mixed_seq_len) 
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 4);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_reverse_mixed_seq_len_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/rnn_reverse_mixed_seq_len_const.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_reverse_mixed_seq_len_const) {
+    auto model = convert_model("rnn_reverse_mixed_seq_len_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>(in_X);
 
     // Y
@@ -1935,12 +1740,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_reverse_mixed_seq_l
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 4);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_bidir_mixed_seq_len_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/rnn_bidir_mixed_seq_len_const.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_bidir_mixed_seq_len_const) {
+    auto model = convert_model("rnn_bidir_mixed_seq_len_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>(in_X);
 
     // Y
@@ -1979,12 +1782,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_bidir_mixed_seq_len
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 7);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_rev_clip_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/rnn_rev_clip_const.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_rev_clip_const) {
+    auto model = convert_model("rnn_rev_clip_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>(in_X);
 
     // Y
@@ -2023,11 +1824,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_rev_clip_const) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 3);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_rev_clip) {
-    auto function = onnx_import::import_onnx_model(
-        file_util::path_join(CommonTestUtils::getExecutableDirectory(), SERIALIZED_ZOO, "onnx/rnn_rev_clip.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_rev_clip) {
+    auto model = convert_model("rnn_rev_clip.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     test_case.add_input<float>(in_X);
     test_case.add_input<float>(in_W);
@@ -2069,11 +1869,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_rev_clip) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 3);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_reverse_const) {
-    auto function = onnx_import::import_onnx_model(
-        file_util::path_join(CommonTestUtils::getExecutableDirectory(), SERIALIZED_ZOO, "onnx/rnn_reverse_const.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_reverse_const) {
+    auto model = convert_model("rnn_reverse_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>(in_X);
 
     // Y
@@ -2112,11 +1911,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_reverse_const) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 3);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_reverse) {
-    auto function = onnx_import::import_onnx_model(
-        file_util::path_join(CommonTestUtils::getExecutableDirectory(), SERIALIZED_ZOO, "onnx/rnn_reverse.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_reverse) {
+    auto model = convert_model("rnn_reverse.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     test_case.add_input<float>(in_X);
     test_case.add_input<float>(in_W);
@@ -2158,12 +1956,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_reverse) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 3);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_fwd_bias_initial_h_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/rnn_fwd_bias_initial_h_const.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_fwd_bias_initial_h_const) {
+    auto model = convert_model("rnn_fwd_bias_initial_h_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>(in_X);
 
     // Y
@@ -2202,12 +1998,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_fwd_bias_initial_h_
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 5);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_fwd_bias_initial_h) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/rnn_fwd_bias_initial_h.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_fwd_bias_initial_h) {
+    auto model = convert_model("rnn_fwd_bias_initial_h.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     test_case.add_input<float>(in_X);
     test_case.add_input<float>(in_W);
@@ -2251,11 +2045,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_fwd_bias_initial_h)
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 5);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_bidirectional) {
-    auto function = onnx_import::import_onnx_model(
-        file_util::path_join(CommonTestUtils::getExecutableDirectory(), SERIALIZED_ZOO, "onnx/rnn_bidirectional.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_bidirectional) {
+    auto model = convert_model("rnn_bidirectional.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     test_case.add_input<float>(in_X);
     test_case.add_input<float>(in_bdir_W);
@@ -2297,12 +2090,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_bidirectional) {
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 6);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_bidirectional_const) {
-    auto function = onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                                        SERIALIZED_ZOO,
-                                                                        "onnx/rnn_bidirectional_const.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_bidirectional_const) {
+    auto model = convert_model("rnn_bidirectional_const.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
 
     test_case.add_input<float>(in_X);
 
@@ -2342,13 +2133,10 @@ NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_bidirectional_const
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 6);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_defaults_fwd_const_dynamic) {
-    auto function =
-        onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                            SERIALIZED_ZOO,
-                                                            "onnx/dynamic_shapes/rnn_defaults_fwd_const_dynamic.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_defaults_fwd_const_dynamic) {
+    auto model = convert_model("dynamic_shapes/rnn_defaults_fwd_const_dynamic.onnx");
 
-    auto test_case = test::TestCase(function, s_device);
+    auto test_case = ov::test::TestCase(model, s_device);
     test_case.add_input<float>(Shape{4, 3, 2}, in_X);
 
     // Y
@@ -2387,11 +2175,8 @@ NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_rnn_defaults_fwd_const_
     test_case.run(DEFAULT_FLOAT_TOLERANCE_BITS + 4);
 }
 
-NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_import_only_rnn_defaults_fwd_const_dynamic) {
-    auto function =
-        onnx_import::import_onnx_model(file_util::path_join(CommonTestUtils::getExecutableDirectory(),
-                                                            SERIALIZED_ZOO,
-                                                            "onnx/dynamic_shapes/rnn_defaults_fwd_const_dynamic.onnx"));
+OPENVINO_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_import_only_rnn_defaults_fwd_const_dynamic) {
+    auto model = convert_model("dynamic_shapes/rnn_defaults_fwd_const_dynamic.onnx");
 
     auto batch_size = Dimension::dynamic();
     auto seq_length = Dimension::dynamic();
@@ -2400,9 +2185,9 @@ NGRAPH_TEST_F(${BACKEND_NAME}, RNNSequenceOp, onnx_model_import_only_rnn_default
     auto Y_expected_output = PartialShape{batch_size, num_directions, seq_length, hidden_size};
     auto Y_h_expected_output = PartialShape{num_directions, batch_size, hidden_size};
 
-    EXPECT_EQ(function->get_output_size(), 2);
-    EXPECT_EQ(function->get_output_partial_shape(0), Y_expected_output);
-    EXPECT_EQ(function->get_output_partial_shape(1), Y_h_expected_output);
+    EXPECT_EQ(model->get_output_size(), 2);
+    EXPECT_EQ(model->get_output_partial_shape(0), Y_expected_output);
+    EXPECT_EQ(model->get_output_partial_shape(1), Y_h_expected_output);
 
-    EXPECT_EQ(count_ops_of_type<op::v5::RNNSequence>(function), 1);
+    EXPECT_EQ(count_ops_of_type<op::v5::RNNSequence>(model), 1);
 }

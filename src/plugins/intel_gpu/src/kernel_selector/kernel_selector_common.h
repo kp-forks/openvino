@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -18,6 +18,10 @@
 #define EXE_MODE_DEFAULT ""
 #define EXE_MODE_AGE_BASED "-cl-no-subgroup-ifp"
 #define EXE_MODE_NO_PRERA_SCH "-cl-intel-no-prera-scheduling"
+
+namespace micro {
+struct MicroKernelPackage;
+}  // namspace
 
 namespace kernel_selector {
 
@@ -42,6 +46,7 @@ namespace kernel_selector {
 
 std::string GetStringEnv(const char* varName);
 
+using KernelLanguage = cldnn::kernel_language;
 using KernelString = cldnn::kernel_string;
 using WorkGroupSizes = cldnn::work_group_sizes;
 using ScalarDescriptor = cldnn::scalar_desc;
@@ -64,34 +69,35 @@ struct KernelCode {
 struct clKernelData {
     KernelCode code;
     KernelParams params;
+    std::vector<std::shared_ptr<micro::MicroKernelPackage>> micro_kernels;
     bool skip_execution = false;
-};
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// CPUKernel
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-struct CPUKernel {
-    virtual WeightsType GetExpectedInputType() = 0;
-    virtual WeightsLayout GetExpectedInputLayout() const { return WeightsLayout::oiyx; }
-    virtual void Execute(void* input, size_t input_size, void* output, size_t output_size) const = 0;
-};
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// GenericKernelParams
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-struct GenericKernelParams {
-    enum class Engine { NONE, CPU, GPU };
-
-    Engine engine = Engine::NONE;
-    std::shared_ptr<clKernelData> clKernel;
-    std::shared_ptr<CPUKernel> cpuKernel;
+    void save(cldnn::BinaryOutputBuffer& ob) const;
+    void load(cldnn::BinaryInputBuffer& ib);
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // WeightsReorderParams
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-struct WeightsReorderParams : public GenericKernelParams {
+struct WeightsReorderParams {
+    WeightsTensor src;
     WeightsTensor dest;
+    bool rotate = false;
+    bool is_initialized = false;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// InternalBuffer
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct InternalBuffer {
+    InternalBuffer() : lockable(false), byte_count(0) {}
+    InternalBuffer(size_t byte_count, bool lockable = false) : lockable(lockable), byte_count(byte_count) {}
+
+    bool lockable = false;
+    size_t byte_count = 0;
+
+    void save(cldnn::BinaryOutputBuffer& ob) const;
+    void load(cldnn::BinaryInputBuffer& ib);
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -100,7 +106,7 @@ struct WeightsReorderParams : public GenericKernelParams {
 struct KernelData {
     std::shared_ptr<Params> params;
     std::vector<clKernelData> kernels;
-    std::vector<size_t> internalBufferSizes;
+    std::vector<InternalBuffer> internalBuffers;
     Datatype internalBufferDataType = Datatype::UNSUPPORTED;
     uint64_t runTime = std::numeric_limits<uint64_t>::max();  // kernel run time in nanoseconds
 
@@ -113,6 +119,7 @@ struct KernelData {
     int autoTuneIndex = -1;
 
     bool can_reuse_memory = true;
+    bool needs_sub_kernels_sync = true;
 
     static bool SkipKernelExecution(const base_params& params, size_t kernel_id = 0) {
         for (const auto& input : params.inputs) {
@@ -142,6 +149,7 @@ struct KernelData {
         kd.reorderInput = false;  // for KW
         kd.autoTuneIndex = -1;
         kd.can_reuse_memory = true;
+        kd.needs_sub_kernels_sync = true;
 
         for (auto& kernel : kd.kernels) {
             kernel.skip_execution = SkipKernelExecution(orgParams);

@@ -1,40 +1,39 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #include "low_precision_transformations/interpolate_transformation.hpp"
 
 using namespace LayerTestsDefinitions;
-using namespace InferenceEngine::details;
 
 namespace {
-const std::vector<ngraph::element::Type> precisions = {
-    ngraph::element::f32,
-    ngraph::element::f16
+const std::vector<ov::element::Type> precisions = {
+    ov::element::f32,
+    ov::element::f16
 };
 
-const std::vector<std::pair<ngraph::PartialShape, ngraph::Shape>> shapes = {
+const std::vector<std::pair<ov::PartialShape, ov::Shape>> shapes = {
     {{1, 4, 16, 16}, {32, 32}},
     {{1, 2, 48, 80}, {50, 60}},
 };
 
 const std::vector<interpAttributes> interpAttrs = {
         interpAttributes(
-            ngraph::AxisSet{2, 3},
+            ov::AxisSet{2, 3},
             "nearest",
             false,
             false,
             {0},
             {0}),
         interpAttributes(
-            ngraph::AxisSet{2, 3},
+            ov::AxisSet{2, 3},
             "nearest",
             false,
             true,
             {0},
             {0}),
         interpAttributes(
-            ngraph::AxisSet{2, 3},
+            ov::AxisSet{2, 3},
             "linear",
             false,
             false,
@@ -45,7 +44,7 @@ const std::vector<interpAttributes> interpAttrs = {
 const auto combineValues = ::testing::Combine(
     ::testing::ValuesIn(precisions),
     ::testing::ValuesIn(shapes),
-    ::testing::Values(CommonTestUtils::DEVICE_GPU),
+    ::testing::Values(ov::test::utils::DEVICE_GPU),
     ::testing::ValuesIn(interpAttrs));
 
 INSTANTIATE_TEST_SUITE_P(smoke_LPT, InterpolateTransformation, combineValues, InterpolateTransformation::getTestCaseName);

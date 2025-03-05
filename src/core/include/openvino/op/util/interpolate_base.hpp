@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -145,12 +145,6 @@ protected:
     void validate_scales_element_type(const element::Type& et) const;
     void validate_sizes_element_type(const element::Type& et) const;
     void validate_axes_element_type(const element::Type& et) const;
-
-    template <class T>
-    friend void correct_pads_attr(const InterpolateBase* op,
-                                  std::vector<size_t>& pads_begin,
-                                  std::vector<size_t>& pads_end,
-                                  const std::vector<T>& input_shapes);
 };
 }  // namespace util
 }  // namespace op
@@ -161,6 +155,7 @@ class OPENVINO_API AttributeAdapter<op::util::InterpolateBase::InterpolateMode>
 public:
     AttributeAdapter(op::util::InterpolateBase::InterpolateMode& value)
         : EnumAttributeAdapterBase<op::util::InterpolateBase::InterpolateMode>(value) {}
+    ~AttributeAdapter() override;
 
     OPENVINO_RTTI("AttributeAdapter<ov::op::util::InterpolateBase::InterpolateMode>");
 };
@@ -171,6 +166,7 @@ class OPENVINO_API AttributeAdapter<op::util::InterpolateBase::CoordinateTransfo
 public:
     AttributeAdapter(op::util::InterpolateBase::CoordinateTransformMode& value)
         : EnumAttributeAdapterBase<op::util::InterpolateBase::CoordinateTransformMode>(value) {}
+    ~AttributeAdapter() override;
 
     OPENVINO_RTTI("AttributeAdapter<ov::op::util::InterpolateBase::CoordinateTransformMode>");
 };
@@ -181,6 +177,7 @@ class OPENVINO_API AttributeAdapter<op::util::InterpolateBase::NearestMode>
 public:
     AttributeAdapter(op::util::InterpolateBase::NearestMode& value)
         : EnumAttributeAdapterBase<op::util::InterpolateBase::NearestMode>(value) {}
+    ~AttributeAdapter() override;
 
     OPENVINO_RTTI("AttributeAdapter<ov::op::util::InterpolateBase::NearestMode>");
 };
@@ -191,6 +188,7 @@ class OPENVINO_API AttributeAdapter<op::util::InterpolateBase::ShapeCalcMode>
 public:
     AttributeAdapter(op::util::InterpolateBase::ShapeCalcMode& value)
         : EnumAttributeAdapterBase<op::util::InterpolateBase::ShapeCalcMode>(value) {}
+    ~AttributeAdapter() override;
 
     OPENVINO_RTTI("AttributeAdapter<ov::op::util::InterpolateBase::ShapeCalcMode>");
 };

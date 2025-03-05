@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -11,13 +11,14 @@
 #include <sstream>
 #include <string>
 
+#include "pyopenvino/core/common.hpp"
 #include "pyopenvino/graph/axis_set.hpp"
 
 namespace py = pybind11;
 
 void regclass_graph_AxisSet(py::module m) {
     py::class_<ov::AxisSet, std::shared_ptr<ov::AxisSet>> axis_set(m, "AxisSet");
-    axis_set.doc() = "openvino.runtime.AxisSet wraps ov::AxisSet";
+    axis_set.doc() = "openvino.AxisSet wraps ov::AxisSet";
     axis_set.def(py::init<const std::initializer_list<size_t>&>(), py::arg("axes"));
     axis_set.def(py::init<const std::set<size_t>&>(), py::arg("axes"));
     axis_set.def(py::init<const std::vector<size_t>&>(), py::arg("axes"));
@@ -38,6 +39,6 @@ void regclass_graph_AxisSet(py::module m) {
         std::stringstream data_ss;
         std::copy(self.begin(), self.end(), std::ostream_iterator<size_t>(data_ss, ", "));
         std::string data_str = data_ss.str();
-        return "<AxisSet {" + data_str.substr(0, data_str.size() - 2) + "}>";
+        return "<" + Common::get_class_name(self) + " {" + data_str.substr(0, data_str.size() - 2) + "}>";
     });
 }

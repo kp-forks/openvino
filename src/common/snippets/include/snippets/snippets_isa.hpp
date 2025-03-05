@@ -1,11 +1,11 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #pragma once
 
-#include "ngraph/ops.hpp"
-#include <ngraph/opsets/opset1.hpp>
+#include "openvino/core/node.hpp"
+#include "openvino/opsets/opset1.hpp"
 
 #include "op/broadcastload.hpp"
 #include "op/broadcastmove.hpp"
@@ -17,6 +17,8 @@
 #include "op/fill.hpp"
 #include "op/kernel.hpp"
 #include "op/load.hpp"
+#include "op/reshape.hpp"
+#include "op/reorder.hpp"
 #include "op/nop.hpp"
 #include "op/scalar.hpp"
 #include "op/powerstatic.hpp"
@@ -24,13 +26,17 @@
 #include "op/loop.hpp"
 #include "op/brgemm.hpp"
 #include "op/vector_buffer.hpp"
+#include "op/rank_normalization.hpp"
+#include "op/perf_count.hpp"
+#include "op/reduce.hpp"
+#include "op/reg_spill.hpp"
 
-namespace ngraph {
+namespace ov {
 namespace snippets {
 namespace isa {
-#define NGRAPH_OP(a, b) using b::a;
+#define OV_OP(a, b) using b::a;
 #include "snippets_isa_tbl.hpp"
-#undef NGRAPH_OP
+#undef OV_OP
 } // namespace isa
 } // namespace snippets
-} // namespace ngraph
+} // namespace ov

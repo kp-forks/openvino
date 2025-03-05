@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -155,7 +155,6 @@ protected:
     BoxEncodingType m_box_encoding = BoxEncodingType::CORNER;
     bool m_sort_result_descending = true;
     ov::element::Type m_output_type = ov::element::i64;
-    void validate();
     int64_t max_boxes_output_from_input() const;
 };
 }  // namespace v3
@@ -356,7 +355,6 @@ protected:
     BoxEncodingType m_box_encoding = BoxEncodingType::CORNER;
     bool m_sort_result_descending = true;
     ov::element::Type m_output_type = ov::element::i64;
-    void validate();
 };
 }  // namespace v5
 
@@ -506,7 +504,6 @@ protected:
     BoxEncodingType m_box_encoding = BoxEncodingType::CORNER;
     bool m_sort_result_descending = true;
     ov::element::Type m_output_type = ov::element::i64;
-    void validate();
 };
 }  // namespace v9
 }  // namespace op
@@ -529,6 +526,7 @@ class OPENVINO_API AttributeAdapter<op::v1::NonMaxSuppression::BoxEncodingType>
 public:
     AttributeAdapter(op::v1::NonMaxSuppression::BoxEncodingType& value)
         : EnumAttributeAdapterBase<op::v1::NonMaxSuppression::BoxEncodingType>(value) {}
+    ~AttributeAdapter() override;
 
     OPENVINO_RTTI("AttributeAdapter<ov::v1::NonMaxSuppression::BoxEncodingType>");
 };
@@ -539,6 +537,7 @@ class OPENVINO_API AttributeAdapter<op::v3::NonMaxSuppression::BoxEncodingType>
 public:
     AttributeAdapter(op::v3::NonMaxSuppression::BoxEncodingType& value)
         : EnumAttributeAdapterBase<op::v3::NonMaxSuppression::BoxEncodingType>(value) {}
+    ~AttributeAdapter() override;
 
     OPENVINO_RTTI("AttributeAdapter<ov::v3::NonMaxSuppression::BoxEncodingType>");
 };
@@ -549,6 +548,7 @@ class OPENVINO_API AttributeAdapter<op::v5::NonMaxSuppression::BoxEncodingType>
 public:
     AttributeAdapter(op::v5::NonMaxSuppression::BoxEncodingType& value)
         : EnumAttributeAdapterBase<op::v5::NonMaxSuppression::BoxEncodingType>(value) {}
+    ~AttributeAdapter() override;
 
     OPENVINO_RTTI("AttributeAdapter<ov::v5::NonMaxSuppression::BoxEncodingType>");
 };
@@ -559,6 +559,7 @@ class OPENVINO_API AttributeAdapter<op::v9::NonMaxSuppression::BoxEncodingType>
 public:
     AttributeAdapter(op::v9::NonMaxSuppression::BoxEncodingType& value)
         : EnumAttributeAdapterBase<op::v9::NonMaxSuppression::BoxEncodingType>(value) {}
+    ~AttributeAdapter() override;
 
     OPENVINO_RTTI("AttributeAdapter<ov::v9::NonMaxSuppression::BoxEncodingType>");
 };

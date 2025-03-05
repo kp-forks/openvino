@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -22,7 +22,7 @@ public:
              const std::vector<ov::element::Type>& output_types,
              const std::vector<ov::PartialShape>& output_shapes,
              const std::shared_ptr<DecoderBase>& decoder = nullptr)
-        : InternalOperation(decoder, OutputVector{}, 1),
+        : InternalOperation(decoder, OutputVector{}, 1, "Iterator"),
           m_shared_name(shared_name),
           m_container(container),
           m_output_types(output_types),
@@ -32,6 +32,13 @@ public:
 
     void validate_and_infer_types() override {
         set_output_type(0, ov::element::dynamic, ov::PartialShape::dynamic());
+    }
+
+    std::shared_ptr<Node> clone_with_new_inputs(const OutputVector& inputs) const override {
+        auto iterator_node =
+            std::make_shared<Iterator>(m_shared_name, m_container, m_output_types, m_output_shapes, m_decoder);
+        iterator_node->set_attrs(get_attrs());
+        return iterator_node;
     }
 
 private:

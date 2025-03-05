@@ -1,11 +1,10 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #pragma once
 
 #include "embedding_shape_infer_utils.hpp"
-#include "openvino/core/validation_util.hpp"
 #include "openvino/op/embeddingbag_offsets_sum.hpp"
 #include "utils.hpp"
 
@@ -13,9 +12,9 @@ namespace ov {
 namespace op {
 namespace util {
 
-template <class TShape>
-std::vector<TShape> shape_infer(const ov::op::util::EmbeddingBagOffsetsBase* op,
-                                const std::vector<TShape>& input_shapes) {
+template <class TShape, class TRShape = result_shape_t<TShape>>
+std::vector<TRShape> shape_infer(const ov::op::util::EmbeddingBagOffsetsBase* op,
+                                 const std::vector<TShape>& input_shapes) {
     const auto input_size = input_shapes.size();
 
     NODE_VALIDATION_CHECK(op, (input_size >= 3 && input_size <= 5));
@@ -45,14 +44,6 @@ std::vector<TShape> shape_infer(const ov::op::util::EmbeddingBagOffsetsBase* op,
 
     return {embedding::out_shape_infer(op, input_shapes[EMB_TABLE], input_shapes[OFFSETS])};
 }
-
-template <class TShape>
-void shape_infer(const ov::op::util::EmbeddingBagOffsetsBase* op,
-                 const std::vector<TShape>& input_shapes,
-                 std::vector<TShape>& output_shapes) {
-    output_shapes = shape_infer(op, input_shapes);
-}
-
 }  // namespace util
 }  // namespace op
 }  // namespace ov

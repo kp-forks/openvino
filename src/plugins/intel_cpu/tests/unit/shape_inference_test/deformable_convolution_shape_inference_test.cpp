@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -30,9 +30,10 @@ TEST_F(DeformableConvolutionV8StaticShapeInferenceTest, default_ctor) {
     op->set_group(4);
     op->set_deformable_group(2);
 
-    input_shapes = ShapeVector{{1, 4, 5, 5}, {1, 36, 3, 1}, {4, 1, 3, 3}, {1, 18, 3, 1}};
+    input_shapes = StaticShapeVector{{1, 4, 5, 5}, {1, 36, 3, 1}, {4, 1, 3, 3}, {1, 18, 3, 1}};
     auto shape_infer = make_shape_inference(op);
-    output_shapes = shape_infer->infer(input_shapes, {}).shapes;
+    const auto input_shape_refs = make_static_shape_refs(input_shapes);
+    output_shapes = *shape_infer->infer(input_shape_refs, make_tensor_accessor());
 
     EXPECT_EQ(output_shapes.size(), 1);
     EXPECT_EQ(output_shapes.front(), StaticShape({1, 4, 3, 1}));
@@ -53,8 +54,8 @@ TEST_F(DeformableConvolutionV8StaticShapeInferenceTest, pads_same_lower_inputs_d
 
     op = make_op(data, offsets, filters, strides, pads_begin, pads_end, dilations, auto_pad, 4, 2);
 
-    input_shapes = ShapeVector{{1, 4, 5, 5}, {1, 36, 5, 5}, {4, 1, 3, 3}};
-    shape_inference(op.get(), input_shapes, output_shapes);
+    input_shapes = StaticShapeVector{{1, 4, 5, 5}, {1, 36, 5, 5}, {4, 1, 3, 3}};
+    output_shapes = shape_inference(op.get(), input_shapes);
 
     EXPECT_EQ(output_shapes.size(), 1);
     EXPECT_EQ(output_shapes[0], StaticShape({1, 4, 5, 5}));
@@ -74,8 +75,8 @@ TEST_F(DeformableConvolutionV8StaticShapeInferenceTest, pads_same_lower_inputs_d
 
     op = make_op(data, offsets, filters, masks, strides, pads_begin, pads_end, dilations, auto_pad, 4, 2);
 
-    input_shapes = ShapeVector{{1, 4, 5, 5}, {1, 36, 5, 5}, {4, 1, 3, 3}, {1, 18, 5, 5}};
-    shape_inference(op.get(), input_shapes, output_shapes);
+    input_shapes = StaticShapeVector{{1, 4, 5, 5}, {1, 36, 5, 5}, {4, 1, 3, 3}, {1, 18, 5, 5}};
+    output_shapes = shape_inference(op.get(), input_shapes);
 
     EXPECT_EQ(output_shapes.size(), 1);
     EXPECT_EQ(output_shapes[0], StaticShape({1, 4, 5, 5}));
@@ -94,8 +95,8 @@ TEST_F(DeformableConvolutionV8StaticShapeInferenceTest, pads_same_uper_inputs_st
 
     op = make_op(data, offsets, filters, strides, pads_begin, pads_end, dilations, auto_pad, 4, 2);
 
-    input_shapes = ShapeVector{{1, 4, 5, 5}, {1, 36, 5, 5}, {4, 1, 3, 3}};
-    shape_inference(op.get(), input_shapes, output_shapes);
+    input_shapes = StaticShapeVector{{1, 4, 5, 5}, {1, 36, 5, 5}, {4, 1, 3, 3}};
+    output_shapes = shape_inference(op.get(), input_shapes);
 
     EXPECT_EQ(output_shapes.size(), 1);
     EXPECT_EQ(output_shapes[0], StaticShape({1, 4, 5, 5}));
@@ -115,8 +116,8 @@ TEST_F(DeformableConvolutionV8StaticShapeInferenceTest, pads_same_upper_inputs_s
 
     op = make_op(data, offsets, filters, masks, strides, pads_begin, pads_end, dilations, auto_pad, 4, 2);
 
-    input_shapes = ShapeVector{{1, 4, 5, 5}, {1, 36, 5, 5}, {4, 1, 3, 3}, {1, 18, 5, 5}};
-    shape_inference(op.get(), input_shapes, output_shapes);
+    input_shapes = StaticShapeVector{{1, 4, 5, 5}, {1, 36, 5, 5}, {4, 1, 3, 3}, {1, 18, 5, 5}};
+    output_shapes = shape_inference(op.get(), input_shapes);
 
     EXPECT_EQ(output_shapes.size(), 1);
     EXPECT_EQ(output_shapes[0], StaticShape({1, 4, 5, 5}));
@@ -136,10 +137,10 @@ TEST_F(DeformableConvolutionV8StaticShapeInferenceTest, mask_channel_dimension_n
 
     op = make_op(data, offsets, filters, strides, pads_begin, pads_end, dilations, auto_pad, 4, 2);
 
-    input_shapes = ShapeVector{{1, 4, 5, 5}, {1, 36, 5, 5}, {4, 1, 3, 3}, {1, 17, 5, 5}};
+    input_shapes = StaticShapeVector{{1, 4, 5, 5}, {1, 36, 5, 5}, {4, 1, 3, 3}, {1, 17, 5, 5}};
 
     OV_EXPECT_THROW(
-        shape_inference(op.get(), input_shapes, output_shapes),
+        shape_inference(op.get(), input_shapes),
         NodeValidationFailure,
         HasSubstr(
             "The channels dimension of mask input is not compatible with filters and 'deformable group' attribute"));

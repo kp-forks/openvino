@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -34,12 +34,12 @@ class PyDecoder : public ov::frontend::pytorch::TorchDecoder {
         PYBIND11_OVERRIDE_PURE(ov::PartialShape, TorchDecoder, get_input_shape, index);
     }
 
-    ov::Any get_input_type(size_t index) const override {
-        PYBIND11_OVERRIDE_PURE(ov::Any, TorchDecoder, get_input_type, index);
+    const std::vector<size_t>& get_input_strides(size_t index) const override {
+        PYBIND11_OVERRIDE_PURE(const std::vector<size_t>&, TorchDecoder, get_input_strides, index);
     }
 
-    const std::vector<size_t>& get_input_transpose_order(size_t index) const override {
-        PYBIND11_OVERRIDE_PURE(const std::vector<size_t>&, TorchDecoder, get_input_transpose_order, index);
+    ov::Any get_input_type(size_t index) const override {
+        PYBIND11_OVERRIDE_PURE(ov::Any, TorchDecoder, get_input_type, index);
     }
 
     const std::string& get_output_debug_name(size_t index) const override {
@@ -52,10 +52,6 @@ class PyDecoder : public ov::frontend::pytorch::TorchDecoder {
 
     ov::Any get_output_type(size_t index) const override {
         PYBIND11_OVERRIDE_PURE(ov::Any, TorchDecoder, get_output_type, index);
-    }
-
-    const std::vector<size_t>& get_output_transpose_order(size_t index) const override {
-        PYBIND11_OVERRIDE_PURE(const std::vector<size_t>&, TorchDecoder, get_output_transpose_order, index);
     }
 
     bool input_is_none(size_t index) const override {
@@ -86,6 +82,10 @@ class PyDecoder : public ov::frontend::pytorch::TorchDecoder {
         PYBIND11_OVERRIDE_PURE(size_t, TorchDecoder, num_of_outputs);
     }
 
+    size_t output_list_size() const override {
+        PYBIND11_OVERRIDE_PURE(size_t, TorchDecoder, output_list_size);
+    }
+
     const std::vector<size_t>& outputs() const override {
         PYBIND11_OVERRIDE_PURE(const std::vector<size_t>&, TorchDecoder, outputs);
     }
@@ -108,6 +108,34 @@ class PyDecoder : public ov::frontend::pytorch::TorchDecoder {
 
     std::shared_ptr<TorchDecoder> get_subgraph_decoder(size_t index) const override {
         PYBIND11_OVERRIDE_PURE(std::shared_ptr<TorchDecoder>, TorchDecoder, get_subgraph_decoder, index);
+    }
+
+    bool may_produce_alias(size_t in_index, size_t out_index) const override {
+        PYBIND11_OVERRIDE_PURE(bool, TorchDecoder, may_produce_alias, in_index, out_index);
+    }
+
+    bool is_input_inlined(size_t index) const override {
+        PYBIND11_OVERRIDE_PURE(bool, TorchDecoder, is_input_inlined, index);
+    }
+
+    std::shared_ptr<TorchDecoder> get_inlined_input_decoder(size_t index) const override {
+        PYBIND11_OVERRIDE_PURE(std::shared_ptr<TorchDecoder>, TorchDecoder, get_inlined_input_decoder, index);
+    }
+
+    ov::Any get_attribute(const std::string &name) const override{
+        PYBIND11_OVERRIDE_PURE(ov::Any, TorchDecoder, get_attribute, name);
+    }
+
+    size_t get_named_input(const std::string &name) const override{
+        PYBIND11_OVERRIDE_PURE(size_t, TorchDecoder, get_named_input, name);
+    }
+
+    const std::string& decoder_type_name() const override {
+        PYBIND11_OVERRIDE_PURE(const std::string&, TorchDecoder, decoder_type_name);
+    }
+
+    ov::frontend::pytorch::DecoderRTInfo get_rt_info() const override {
+        PYBIND11_OVERRIDE_PURE(ov::frontend::pytorch::DecoderRTInfo, TorchDecoder, get_rt_info);
     }
 };
 

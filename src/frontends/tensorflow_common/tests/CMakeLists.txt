@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2023 Intel Corporation
+# Copyright (C) 2018-2025 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 #
 
@@ -9,9 +9,9 @@ ov_add_test_target(
         ROOT ${CMAKE_CURRENT_SOURCE_DIR}
         LINK_LIBRARIES
             gtest_main_manifest 
+            frontend_shared_test_classes
             openvino_tensorflow_common
         ADD_CLANG_FORMAT
         LABELS
-            OV
-            TF_COMMON
+            OV UNIT TF_COMMON
 )

@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -13,9 +13,9 @@ public:
     RemoteContext();
     const std::string& get_device_name() const override;
     const ov::AnyMap& get_property() const override;
-    std::shared_ptr<IRemoteTensor> create_tensor(const ov::element::Type& type,
-                                                 const ov::Shape& shape,
-                                                 const ov::AnyMap& params = {}) override;
+    ov::SoPtr<IRemoteTensor> create_tensor(const ov::element::Type& type,
+                                           const ov::Shape& shape,
+                                           const ov::AnyMap& params = {}) override;
 
 private:
     std::string m_name;

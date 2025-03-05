@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -14,25 +14,26 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#ifndef ENABLE_UNICODE_PATH_SUPPORT
+#ifndef OPENVINO_ENABLE_UNICODE_PATH_SUPPORT
 #    ifdef _WIN32
-#        if defined __INTEL_COMPILER || defined _MSC_VER
-#            define ENABLE_UNICODE_PATH_SUPPORT
+#        if defined(__INTEL_COMPILER) || defined(_MSC_VER) || defined(__GNUC__)
+#            define OPENVINO_ENABLE_UNICODE_PATH_SUPPORT
 #        endif
-#    elif defined(__GNUC__) && (__GNUC__ > 5 || (__GNUC__ == 5 && __GNUC_MINOR__ > 2)) || defined(__clang__)
-#        define ENABLE_UNICODE_PATH_SUPPORT
+#    elif defined(__clang__)
+#        define OPENVINO_ENABLE_UNICODE_PATH_SUPPORT
+#    elif defined(__GNUC__) && (__GNUC__ > 5 || (__GNUC__ == 5 && __GNUC_MINOR__ > 2))
+#        define OPENVINO_ENABLE_UNICODE_PATH_SUPPORT
 #    endif
 #endif
 
-#ifdef ENABLE_UNICODE_PATH_SUPPORT
-#    define OPENVINO_ENABLE_UNICODE_PATH_SUPPORT
+#ifdef OPENVINO_ENABLE_UNICODE_PATH_SUPPORT
 #    include <wchar.h>
 #endif
 
 #ifdef __cplusplus
 #    define OPENVINO_C_API_EXTERN extern "C"
 #else
-#    define OPENVINO_C_API_EXTERN
+#    define OPENVINO_C_API_EXTERN extern
 #endif
 
 #if defined(OPENVINO_STATIC_LIBRARY) || defined(__GNUC__) && (__GNUC__ < 4)
@@ -40,7 +41,7 @@
 #    define OPENVINO_C_VAR(...) OPENVINO_C_API_EXTERN __VA_ARGS__
 #    define OV_NODISCARD
 #else
-#    if defined(_WIN32)
+#    if defined(_WIN32) || defined(__CYGWIN__)
 #        define OPENVINO_C_API_CALLBACK __cdecl
 #        ifdef openvino_c_EXPORTS
 #            define OPENVINO_C_API(...) OPENVINO_C_API_EXTERN __declspec(dllexport) __VA_ARGS__ __cdecl
@@ -121,7 +122,7 @@
  * @ingroup ov_c_api
  * @brief The definitions & operations about tensor
  *
- * @defgroup ov_remote_context_c_api ov_remote_context
+ * @defgroup ov_remote_context_c_api Remote Context
  * @ingroup ov_c_api
  * @brief Set of functions representing of RemoteContext
  */
@@ -164,28 +165,57 @@ typedef enum {
 /**
  * @enum ov_element_type_e
  * @ingroup ov_base_c_api
- * @brief This enum contains codes for element type.
+ * @brief This enum contains codes for element type, which is aligned with ov::element::Type_t in
+ * src/core/include/openvino/core/type/element_type.hpp
  */
 typedef enum {
-    UNDEFINED = 0U,  //!< Undefined element type
-    DYNAMIC,         //!< Dynamic element type
-    BOOLEAN,         //!< boolean element type
-    BF16,            //!< bf16 element type
-    F16,             //!< f16 element type
-    F32,             //!< f32 element type
-    F64,             //!< f64 element type
-    I4,              //!< i4 element type
-    I8,              //!< i8 element type
-    I16,             //!< i16 element type
-    I32,             //!< i32 element type
-    I64,             //!< i64 element type
-    U1,              //!< binary element type
-    U4,              //!< u4 element type
-    U8,              //!< u8 element type
-    U16,             //!< u16 element type
-    U32,             //!< u32 element type
-    U64,             //!< u64 element type
+    UNDEFINED = 0U,       //!< Undefined element type
+    DYNAMIC = UNDEFINED,  //!< Dynamic element type
+    BOOLEAN,              //!< boolean element type
+    BF16,                 //!< bf16 element type
+    F16,                  //!< f16 element type
+    F32,                  //!< f32 element type
+    F64,                  //!< f64 element type
+    I4,                   //!< i4 element type
+    I8,                   //!< i8 element type
+    I16,                  //!< i16 element type
+    I32,                  //!< i32 element type
+    I64,                  //!< i64 element type
+    U1,                   //!< binary element type
+    U2,                   //!< u2 element type
+    U3,                   //!< u3 element type
+    U4,                   //!< u4 element type
+    U6,                   //!< u6 element type
+    U8,                   //!< u8 element type
+    U16,                  //!< u16 element type
+    U32,                  //!< u32 element type
+    U64,                  //!< u64 element type
+    NF4,                  //!< nf4 element type
+    F8E4M3,               //!< f8e4m3 element type
+    F8E5M3,               //!< f8e5m2 element type
+    STRING,               //!< string element type
+    F4E2M1,               //!< f4e2m1 element type
+    F8E8M0,               //!< f8e8m0 element type
 } ov_element_type_e;
+
+/**
+ * @brief encryption_func is a function pointer that encrypt or decrypt the input memory, example of this function is
+ * codec(const char* input, const size_t in_size, const char* output, size_t* out_size)
+ * This function needs to be called twice,
+ * the first call to obtain out_size (the size of output buffer), the second call to obtain output buffer.
+ * The first call output is nullptr, before the second call, the caller needs to apply for output
+ * memory based on the out_size returned by the first call.
+ * the memory of parameter output is allocated and released by the caller.
+ * @param input The pointer to the input buffer.
+ * @param in_size The size of input.
+ * @param output The pointer to the encrypted/decrypted buffer.
+ * @param out_size The size of output.
+ */
+typedef void (*encryption_func)(const char*, const size_t, char*, size_t*);
+typedef struct {
+    encryption_func encrypt_func;  // encryption function pointer
+    encryption_func decrypt_func;  // decryption function pointer
+} ov_encryption_callbacks;
 
 /**
  * @brief Print the error info.
@@ -202,3 +232,10 @@ ov_get_error_info(ov_status_e status);
  */
 OPENVINO_C_API(void)
 ov_free(const char* content);
+
+/**
+ * @brief Get the last error msg.
+ * @ingroup ov_base_c_api
+ */
+OPENVINO_C_API(const char*)
+ov_get_last_err_msg();

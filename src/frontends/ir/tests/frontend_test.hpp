@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -8,6 +8,7 @@
 
 #include "common_test_utils/common_utils.hpp"
 #include "common_test_utils/graph_comparator.hpp"
+#include "common_test_utils/test_assertions.hpp"
 #include "openvino/frontend/manager.hpp"
 #include "openvino/openvino.hpp"
 
@@ -22,7 +23,7 @@ protected:
     void createTemporalModelFile(std::string xmlFileContent,
                                  std::vector<unsigned char> binFileContent = std::vector<unsigned char>()) {
         ASSERT_TRUE(xmlFileContent.size() > 0);
-        auto filePrefix = CommonTestUtils::generateTestFilePrefix();
+        auto filePrefix = ov::test::utils::generateTestFilePrefix();
         xmlFileName = filePrefix + "_IrFrontendTestModel.xml";
         binFileName = filePrefix + "_IrFrontendTestModel.bin";
 

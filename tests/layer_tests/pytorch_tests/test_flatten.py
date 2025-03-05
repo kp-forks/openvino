@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2023 Intel Corporation
+# Copyright (C) 2018-2025 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
@@ -27,7 +27,9 @@ class TestFlatten(PytorchLayerTest):
 
         return aten_flatten(dim0, dim1), ref_net, "aten::flatten"
 
-    @pytest.mark.parametrize("dim0,dim1", [[0, 1],
+    @pytest.mark.parametrize("dim0,dim1", [[0, -1],
+                                           [-2, -1],
+                                           [0, 1],
                                            [0, 2],
                                            [0, 3],
                                            [1, 2],
@@ -35,6 +37,7 @@ class TestFlatten(PytorchLayerTest):
                                            [2, 3]])
     @pytest.mark.nightly
     @pytest.mark.precommit
-    def test_relu(self, dim0, dim1, ie_device, precision, ir_version):
+    @pytest.mark.precommit_torch_export
+    def test_flatten(self, dim0, dim1, ie_device, precision, ir_version):
         self._test(*self.create_model(dim0, dim1),
                    ie_device, precision, ir_version)

@@ -1,13 +1,14 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #pragma once
 
 #include <memory>
-#include <openvino/pass/graph_rewrite.hpp>
-#include <openvino/pass/pattern/matcher.hpp>
-#include <transformations_visibility.hpp>
+
+#include "openvino/pass/matcher_pass.hpp"
+#include "openvino/pass/pattern/matcher.hpp"
+#include "transformations_visibility.hpp"
 
 namespace ov {
 namespace pass {
@@ -18,11 +19,11 @@ class TRANSFORMATIONS_API BroadcastTransition;
 }  // namespace ov
 
 /**
- * @ingroup ie_transformation_common_api
+ * @ingroup ov_transformation_common_api
  * @brief BroadcastTransition transformation moves broadcast through binary eltwise operation
  */
 class ov::pass::BroadcastTransition : public ov::pass::MatcherPass {
 public:
-    OPENVINO_RTTI("BroadcastTransition", "0");
+    OPENVINO_MATCHER_PASS_RTTI("BroadcastTransition");
     BroadcastTransition();
 };

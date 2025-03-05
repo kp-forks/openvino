@@ -4,20 +4,19 @@
 
 #pragma once
 
-#include <ngraph/pass/graph_rewrite.hpp>
-#include <transformations_visibility.hpp>
+#include "openvino/pass/graph_rewrite.hpp"
+#include "openvino/core/visibility.hpp"
 
-namespace ov {
-namespace intel_gpu {
+namespace ov::intel_gpu {
 
 /**
  * @brief EinsumDecomposition transformation decomposes Einsum-7 operation into a sub-graph with more simple operations:
  *        Transpose, Reshape, MatMul, ReduceSum, Unsqueeze, ShapeOf, ReduceProd, StridedSlice, and Concat
  */
-class EinsumDecomposition : public ngraph::pass::MatcherPass {
+class EinsumDecomposition : public ov::pass::MatcherPass {
 public:
+    OPENVINO_MATCHER_PASS_RTTI("EinsumDecomposition");
     EinsumDecomposition();
 };
 
-}  // namespace intel_gpu
-}  // namespace ov
+}  // namespace ov::intel_gpu

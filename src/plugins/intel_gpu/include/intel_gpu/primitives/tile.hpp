@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -12,22 +12,22 @@ namespace cldnn {
 struct tile : public primitive_base<tile> {
     CLDNN_DECLARE_PRIMITIVE(tile)
 
+    tile() : primitive_base("", {}) {}
+
     /// @brief Constructs tile primitive with static input.
     /// @param id This primitive id.
     /// @param repeats Per-dimension replication factor.
     tile(const primitive_id& id,
          const input_info& input,
-         const std::vector<int64_t> repeats,
-         const padding& output_padding = padding())
-        : primitive_base(id, {input}, {output_padding}),
+         const std::vector<int64_t> repeats)
+        : primitive_base(id, {input}),
           repeats(repeats) {}
 
     // @brief Constructs tile primitive with dynamic input.
     tile(const primitive_id& id,
          const input_info& input,
-         const input_info& repeats_id,
-         const padding& output_padding = padding())
-        : primitive_base(id, {input, repeats_id}, {output_padding}),
+         const input_info& repeats_id)
+        : primitive_base(id, {input, repeats_id}),
           repeats({}) {}
 
     /// @brief A per-dimension replication factor
@@ -46,6 +46,16 @@ struct tile : public primitive_base<tile> {
         auto rhs_casted = downcast<const tile>(rhs);
 
         return repeats == rhs_casted.repeats;
+    }
+
+    void save(BinaryOutputBuffer& ob) const override {
+        primitive_base<tile>::save(ob);
+        ob << repeats;
+    }
+
+    void load(BinaryInputBuffer& ib) override {
+        primitive_base<tile>::load(ib);
+        ib >> repeats;
     }
 };
 }  // namespace cldnn

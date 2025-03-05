@@ -1,21 +1,22 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "intel_gpu/plugin/program.hpp"
+#include "intel_gpu/plugin/program_builder.hpp"
 #include "intel_gpu/plugin/common_utils.hpp"
 
-#include "ngraph/op/strided_slice.hpp"
-#include "ngraph/op/constant.hpp"
+#include "openvino/op/strided_slice.hpp"
+#include "openvino/op/constant.hpp"
 
 #include "intel_gpu/primitives/strided_slice.hpp"
 #include "intel_gpu/primitives/reshape.hpp"
 #include "intel_gpu/primitives/crop.hpp"
 
-namespace ov {
-namespace intel_gpu {
+#include <climits>
 
-static void CreateStridedSliceOp(Program& p, const std::shared_ptr<ngraph::op::v1::StridedSlice>& op) {
+namespace ov::intel_gpu {
+
+static void CreateStridedSliceOp(ProgramBuilder& p, const std::shared_ptr<ov::op::v1::StridedSlice>& op) {
     validate_inputs_count(op, {4});
     auto inputs = p.GetInputInfo(op);
     std::string layerName = layer_type_name_ID(op);
@@ -23,15 +24,35 @@ static void CreateStridedSliceOp(Program& p, const std::shared_ptr<ngraph::op::v
     auto output_pshape = op->get_output_partial_shape(0);
     auto input_pshape = op->get_input_partial_shape(0);
 
-    auto begin_constant = std::dynamic_pointer_cast<ngraph::op::v0::Constant>(op->input_value(1).get_node_shared_ptr());
-    std::vector<int64_t> begin = begin_constant ? begin_constant->cast_vector<int64_t>() : std::vector<int64_t>{};
-    auto end_constant = std::dynamic_pointer_cast<ngraph::op::v0::Constant>(op->input_value(2).get_node_shared_ptr());
-    std::vector<int64_t> end = end_constant ? end_constant->cast_vector<int64_t>() : std::vector<int64_t>{};
-    auto stride_constant = std::dynamic_pointer_cast<ngraph::op::v0::Constant>(op->input_value(3).get_node_shared_ptr());
+    auto convert_max_val = [](int64_t casted_val, ov::element::Type type) {
+        // if the original const is int32_t and the value is max,
+        // it should be kept to set the shape as unbounded dynamic shape.
+        if ((type == ov::element::i32 && casted_val == INT_MAX) || (type == ov::element::u32 && casted_val == UINT_MAX))
+            return static_cast<int64_t>(0x7FFFFFFFFFFFFFFF);
+        return casted_val;
+    };
+
+    auto begin_constant = ov::as_type_ptr<ov::op::v0::Constant>(op->input_value(1).get_node_shared_ptr());
+    std::vector<int64_t> begin;
+    if (begin_constant) {
+        auto const_vals = begin_constant->cast_vector<int64_t>();
+        for (auto val : const_vals) {
+            begin.push_back(convert_max_val(val, begin_constant->get_element_type()));
+        }
+    }
+    auto end_constant = ov::as_type_ptr<ov::op::v0::Constant>(op->input_value(2).get_node_shared_ptr());
+    std::vector<int64_t> end;
+    if (end_constant) {
+       auto const_vals = end_constant->cast_vector<int64_t>();
+        for (auto val : const_vals) {
+            end.push_back(convert_max_val(val, end_constant->get_element_type()));
+        }
+    }
+    auto stride_constant = ov::as_type_ptr<ov::op::v0::Constant>(op->input_value(3).get_node_shared_ptr());
     std::vector<int64_t> strides = stride_constant ? stride_constant->cast_vector<int64_t>() : std::vector<int64_t>{};
 
     do {
-        if (!begin_constant || !end_constant || !stride_constant || input_pshape.is_dynamic()) {
+        if (!begin_constant || !end_constant || !stride_constant || input_pshape.is_dynamic() || p.use_new_shape_infer()) {
             break;
         }
 
@@ -53,7 +74,7 @@ static void CreateStridedSliceOp(Program& p, const std::shared_ptr<ngraph::op::v
             break;
 
         auto convert_to_set = [](const std::vector<int64_t> mask) {
-            ngraph::AxisSet axis_set{};
+            ov::AxisSet axis_set{};
             for (size_t i = 0; i < static_cast<size_t>(mask.size()); ++i) {
                 if (mask[i] == 1) {
                     axis_set.emplace(i);
@@ -210,7 +231,7 @@ static void CreateStridedSliceOp(Program& p, const std::shared_ptr<ngraph::op::v
             offset_tensor[axes[i]] = static_cast<cldnn::tensor::value_type>(offset[i]);
         }
 
-        ngraph::Shape crop_shape(reshape_pattern);
+        ov::Shape crop_shape(reshape_pattern);
         for (size_t i = 0; i < axes.size(); ++i) {
             crop_shape[axes[i]] = dim[i];
         }
@@ -231,7 +252,9 @@ static void CreateStridedSliceOp(Program& p, const std::shared_ptr<ngraph::op::v
             }
 
             auto reshapeOutName = op->get_friendly_name() + "/Crop";
-            auto reshapePrim = cldnn::reshape(reshapeOutName, layerName, false, output_pattern, output_pshape);
+            auto output_ts = tensor_from_dims(output_shape);
+            auto reshapePrim = cldnn::reshape(reshapeOutName, layerName, output_ts);
+
             p.add_primitive(*op, reshapePrim);
             last_layer_primitive = reshapeOutName;
         }
@@ -243,7 +266,7 @@ static void CreateStridedSliceOp(Program& p, const std::shared_ptr<ngraph::op::v
     auto output_shape = output_pshape.is_static() ? output_pshape.to_shape() : ov::Shape{};
 
     std::shared_ptr<cldnn::strided_slice> stridedSlicePrim = nullptr;
-    if (begin_constant && end_constant && stride_constant && !input_pshape.is_dynamic() && !output_pshape.is_dynamic()) {
+    if (begin_constant && end_constant && stride_constant && !input_pshape.is_dynamic() && !output_pshape.is_dynamic() && !p.use_new_shape_infer()) {
         stridedSlicePrim = std::make_shared<cldnn::strided_slice>(layerName,
                                                                   inputs[0],
                                                                   begin,
@@ -257,10 +280,10 @@ static void CreateStridedSliceOp(Program& p, const std::shared_ptr<ngraph::op::v
                                                                   output_shape);
     } else {
         stridedSlicePrim = std::make_shared<cldnn::strided_slice>(layerName,
-                                                                  inputs[0],
-                                                                  inputs[1],
-                                                                  inputs[2],
-                                                                  inputs[3],
+                                                                  inputs,
+                                                                  begin,
+                                                                  end,
+                                                                  strides,
                                                                   op->get_begin_mask(),
                                                                   op->get_end_mask(),
                                                                   op->get_new_axis_mask(),
@@ -273,5 +296,4 @@ static void CreateStridedSliceOp(Program& p, const std::shared_ptr<ngraph::op::v
 
 REGISTER_FACTORY_IMPL(v1, StridedSlice);
 
-}  // namespace intel_gpu
-}  // namespace ov
+}  // namespace ov::intel_gpu

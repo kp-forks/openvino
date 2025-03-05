@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -23,22 +23,18 @@ struct quantize : public primitive_base<quantize> {
              const input_info& output_low,
              const input_info& output_high,
              const int levels,
-             const data_types output_data_type,
-             const padding& output_padding = padding())
-        : primitive_base(id, {input, input_low, input_high, output_low, output_high}, {output_padding}, {optional_data_type{output_data_type}})
+             const data_types output_data_type)
+        : primitive_base(id, {input, input_low, input_high, output_low, output_high}, 1, {optional_data_type{output_data_type}})
         , levels(levels) {}
 
     quantize(const primitive_id& id,
              const std::vector<input_info>& inputs,
              const int levels,
-             const data_types output_data_type,
-             const padding& output_padding = padding())
-        : primitive_base(id, inputs, {output_padding}, {optional_data_type{output_data_type}})
+             const data_types output_data_type)
+        : primitive_base(id, inputs, 1, {optional_data_type{output_data_type}})
         , levels(levels) {}
 
     quantize() : primitive_base("", {}), levels(0) {}
-
-    DECLARE_OBJECT_TYPE_SERIALIZATION
 
     /// @brief levels The number of quantization levels.
     int levels;
@@ -125,6 +121,7 @@ struct quantize : public primitive_base<quantize> {
     }
 
     void save(BinaryOutputBuffer& ob) const override {
+        primitive_base<quantize>::save(ob);
         ob << levels;
         ob << scale_shift_opt;
         ob << need_post_scale;
@@ -150,6 +147,7 @@ struct quantize : public primitive_base<quantize> {
     }
 
     void load(BinaryInputBuffer& ib) override {
+        primitive_base<quantize>::load(ib);
         ib >> levels;
         ib >> scale_shift_opt;
         ib >> need_post_scale;

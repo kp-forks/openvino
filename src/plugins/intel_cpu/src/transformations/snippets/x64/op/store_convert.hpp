@@ -1,14 +1,12 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2018-2025 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #pragma once
 
-#include "ngraph/op/op.hpp"
 #include "snippets/op/store.hpp"
 
-namespace ov {
-namespace intel_cpu {
+namespace ov::intel_cpu {
 
 /**
  * @interface StoreConvertSaturation
@@ -16,14 +14,19 @@ namespace intel_cpu {
  *        The operation is used for peephole optimization during subgraph lowering.
  * @ingroup snippets
  */
-class StoreConvertSaturation : public ngraph::snippets::op::Store {
+class StoreConvertSaturation : public snippets::op::Store {
 public:
-    OPENVINO_OP("StoreConvertSaturation", "SnippetsOpset", ngraph::snippets::op::Store);
+    OPENVINO_OP("StoreConvertSaturation", "SnippetsOpset", snippets::op::Store);
 
-    StoreConvertSaturation(const Output<Node>& x, const ov::element::Type& destination_type, const size_t count = 1lu, const size_t offset = 0lu);
+    StoreConvertSaturation(const Output<Node>& x,
+                           const ov::element::Type& destination_type,
+                           const size_t count = 1lu,
+                           const size_t offset = 0lu);
     StoreConvertSaturation() = default;
 
-    ov::element::Type get_destination_type() const { return m_destination_type; }
+    ov::element::Type get_destination_type() const {
+        return m_destination_type;
+    }
 
     bool visit_attributes(AttributeVisitor& visitor) override;
 
@@ -31,7 +34,9 @@ public:
 
     void validate_and_infer_types() override;
 
-    bool has_evaluate() const override { return false; }
+    bool has_evaluate() const override {
+        return false;
+    }
 
 protected:
     ov::element::Type m_destination_type;
@@ -43,14 +48,19 @@ protected:
  *        The operation is used for peephole optimization during subgraph lowering.
  * @ingroup snippets
  */
-class StoreConvertTruncation : public ngraph::snippets::op::Store {
+class StoreConvertTruncation : public snippets::op::Store {
 public:
-    OPENVINO_OP("StoreConvertTruncation", "SnippetsOpset", ngraph::snippets::op::Store);
+    OPENVINO_OP("StoreConvertTruncation", "SnippetsOpset", snippets::op::Store);
 
-    StoreConvertTruncation(const Output<Node>& x, const ov::element::Type& destination_type, const size_t count = 1lu, const size_t offset = 0lu);
+    StoreConvertTruncation(const Output<Node>& x,
+                           const ov::element::Type& destination_type,
+                           const size_t count = 1lu,
+                           const size_t offset = 0lu);
     StoreConvertTruncation() = default;
 
-    ov::element::Type get_destination_type() const { return m_destination_type; }
+    ov::element::Type get_destination_type() const {
+        return m_destination_type;
+    }
 
     bool visit_attributes(AttributeVisitor& visitor) override;
 
@@ -58,11 +68,12 @@ public:
 
     void validate_and_infer_types() override;
 
-    bool has_evaluate() const override { return false; }
+    bool has_evaluate() const override {
+        return false;
+    }
 
 protected:
     ov::element::Type m_destination_type;
 };
 
-} // namespace intel_cpu
-} // namespace ov
+}  // namespace ov::intel_cpu
